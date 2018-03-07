@@ -9,9 +9,6 @@ from stageinfo import *
 from miscdetails import *
 from bindata import *
 
-commandprefix = "!"
-paramdelim = "..."
-
 BinStorage.workingdirs["ext"] = os.path.abspath("output")
 BinStorage.workingdirs["app"] = os.path.abspath("appoutput")
 
@@ -20,7 +17,9 @@ sdataExpert = StageData("Configuration Tables/stageDataExtra.bin")
 sdataEvent = StageData("Configuration Tables/stageDataEvent.bin")
 dpdata = DisruptionPattern("Configuration Tables/bossActionStageLayout.bin")
 
-#DICTIONARIES
+##############
+#DICTIONARIES#
+##############
 #These dictionaries help look up data quickly
 
 #POKEMON DICTIONARY
@@ -131,13 +130,19 @@ for eb in ebpokemon:
         temp = line.split(" ")
         ebstagesdict[eb][temp[1][:-1]] = temp[4]
 
-#ALIASES DICTIONARY
-#Aliases are stored in a text file
+##########
+#SETTINGS#
+##########
+#Settings are read and written in text files
+
+#ALIASES
 def updatealiases():
     aliases.clear()
     file = open("../namealiases.txt")
     filecontents = file.read()
     for line in filecontents.split("\n"):
+        if line == "":
+            continue
         original = line.split("\t")[0]
         othername = line.split("\t")[1]
         aliases[othername.lower()] = original.lower()
@@ -169,7 +174,101 @@ global aliases
 aliases = {}
 updatealiases()
 
-#DISCORD BOT SETUP
+#COMMAND LOCKS
+#This holds info on which commands are locked on which channels
+def updatecommandlocks():
+    commandlocks.clear()
+    file = open("../commandlocks.txt")
+    filecontents = file.read()
+    for line in filecontents.split("\n"):
+        if line == "":
+            continue
+        command = line.split("\t")[0]
+        channelid = line.split("\t")[1]
+        if command in commandlocks.keys():
+            commandlocks[command].append(channelid)
+        else:
+            commandlocks[command] = [channelid]
+            
+    file.close()
+
+def addcommandlock(command, channelid):
+    if command not in commandlocks.keys():
+        commandlocks[command] = [channelid]
+    elif channelid in commandlocks[command]:
+        return -1
+    else:
+        commandlocks[command].append(channelid)
+    
+    file = open("../commandlocks.txt", "a")
+    file.write("\n{}\t{}".format(command, channelid))
+    file.close()
+    return 0
+
+global commandlocks
+commandlocks = {}
+updatecommandlocks()
+
+publiccommands = ["help", "addalias", "pokemon", "skill", "stage", "event", "query", "ebrewards"]
+admincommands = ["commandlock", "restrict"]
+
+#ADMINS
+def updateadmins():
+    admins.clear()
+    file = open("../admins.txt")
+    filecontents = file.read()
+    for line in filecontents.split("\n"):
+        if line == "":
+            continue
+        admins.append(line)
+    file.close()
+
+def addadmin(userid):
+    if userid in admins:
+        return -1
+    file = open("../admins.txt", "a")
+    file.write("\n{}".format(userid))
+    file.close()
+    admins.append(userid)
+    return 0
+    
+global admins
+admins = []
+updateadmins()
+masteradmin = "132675899265908738"
+
+#RESTRICTED USERS
+def updaterestrictedusers():
+    restrictedusers.clear()
+    file = open("../restrictedusers.txt")
+    filecontents = file.read()
+    for line in filecontents.split("\n"):
+        if line == "":
+            continue
+        restrictedusers.append(line)
+    file.close()
+
+def addrestricteduser(userid):
+    if userid in restrictedusers:
+        return -1
+    elif userid in admins:
+        return -2
+    file = open("../restrictedusers.txt", "a")
+    file.write("\n{}".format(userid))
+    file.close()
+    restrictedusers.append(userid)
+    return 0
+
+global restrictedusers
+restrictedusers = []
+updaterestrictedusers()
+
+###################
+#DISCORD BOT SETUP#
+###################
+commandprefix = "!"
+paramdelim = ", "
+
 client = discord.Client()
 bot_prefix = "!"
 client = commands.Bot(command_prefix=bot_prefix)
@@ -206,7 +305,9 @@ responses["/o\\"] = "\\o/"
 responses["(╯°□°）╯︵ ┻━┻"] = "┬─┬ ノ( ゜-゜ノ)"
 responses[b'\xf0\x9f\x90\xb2'.decode("utf-8")] = b'\xf0\x9f\x90\xb2'.decode("utf-8")
 
-#INPUT OUTPUT
+##############
+#INPUT OUTPUT#
+##############
 @client.event
 async def on_message(message):
     #MISC
@@ -219,10 +320,23 @@ async def on_message(message):
     command = ""
     params = []
     if message.content.startswith(commandprefix) and message.author.id != client.user.id:
-        command = message.content[len(commandprefix):message.content.index(" ")]
-        params = message.content[message.content.index(" ")+1:].split(paramdelim)
+        try:
+            command = message.content[len(commandprefix):message.content.index(" ")]
+            params = message.content[message.content.index(" ")+1:].split(paramdelim)
+        except ValueError:
+            command = message.content[len(commandprefix):]
     else:
         return
+    
+    if command in admincommands and message.author.id not in admins:
+        await client.send_message(message.channel, "This command can only be used by KoduckBot admins")
+        return
+    try:
+        if message.channel.id in commandlocks[command] and message.author.id not in admins:
+            await client.send_message(message.channel, "This command is locked on this channel")
+            return
+    except KeyError:
+        okay = "okay"
     
     #TEST
     if command == "test":
@@ -241,13 +355,14 @@ async def on_message(message):
         returnmessage += "{}stage main{}424\n".format(commandprefix, paramdelim)
         returnmessage += "{}stage expert{}charizard\n".format(commandprefix, paramdelim)
         returnmessage += "{}stage event{}wobbuffet (male)\n".format(commandprefix, paramdelim)
+        returnmessage += "{}stage eb{}latios{}95\n".format(commandprefix, paramdelim, paramdelim)
         returnmessage += "{}event wobbuffet (male)\n".format(commandprefix)
         returnmessage += "{}query type=grass{}bp=40{}rml=20{}skill=power of 4{}ss=mega boost+\n".format(commandprefix, paramdelim, paramdelim, paramdelim, paramdelim)
         returnmessage += "{}query maxap=105{}skillss=shot out\n".format(commandprefix, paramdelim)
         returnmessage += "{}ebrewards volcanion".format(commandprefix)
         await client.send_message(message.channel, returnmessage)
     
-    if command == "updatealiases":
+    if command == "updatealiases" and message.author.id == masteradmin:
         updatealiases()
     
     if command == "addalias":
@@ -259,6 +374,46 @@ async def on_message(message):
                 await client.send_message(message.channel, "Alias already exists")
         except IndexError:
             await client.send_message(message.channel, "Needs two parameters: original, alias")
+    
+    if command == "updatecommandlocks" and message.author.id == masteradmin:
+        updatecommandlocks()
+    
+    if command == "commandlock":
+        try:
+            commandtolock = params[0]
+        except IndexError:
+            await client.send_message(message.channel, "I need a command to lock!")
+            return
+        if commandtolock not in publiccommands:
+            await client.send_message(message.channel, "{}{} is not a public command".format(commandprefix, commandtolock))
+            return
+        returnvalue = addcommandlock(commandtolock, message.channel.id)
+        if returnvalue == 0:
+            await client.send_message(message.channel, "{}{} is now locked on this channel".format(commandprefix, commandtolock))
+        elif returnvalue == -1:
+            await client.send_message(message.channel, "{}{} is already locked on this channel".format(commandprefix, commandtolock))
+    
+    if command == "updateadmins" and message.author.id == masteradmin:
+        updateadmins()
+    
+    if command == "addadmin" and message.author.id == masteradmin:
+        returnvalue = addadmin(message.mentions[0].id)
+        if returnvalue == 0:
+            await client.send_message(message.channel, "<@!{}> is now a KoduckBot admin!".format(message.mentions[0].id))
+        elif returnvalue == -1:
+            await client.send_message(message.channel, "That user is already a KoduckBot admin")
+    
+    if command == "updaterestrictedusers" and message.author.id == masteradmin:
+        updaterestrictedusers()
+    
+    if command == "restrict":
+        returnvalue = addrestricteduser(message.mentions[0].id)
+        if returnvalue == 0:
+            await client.send_message(message.channel, "<@!{}> is now restricted from using KoduckBot commands".format(message.mentions[0].id))
+        elif returnvalue == -1:
+            await client.send_message(message.channel, "That user is already restricted")
+        elif returnvalue == -2:
+            await client.send_message(message.channel, "KoduckBot admins cannot be restricted")
     
     #POKEMON
     if command == "pokemon":
@@ -273,7 +428,7 @@ async def on_message(message):
             await client.send_message(message.channel, embed=formatpokemonembed(pokemon))
         
         except KeyError:
-            await client.send_message(message.channel, "Could not find a Pokemon entry with that name.")
+            await client.send_message(message.channel, "Could not find a Pokemon entry with that name")
     
     #SKILL
     if command == "skill":
@@ -287,7 +442,7 @@ async def on_message(message):
             skill = PokemonAbility.getAbilityInfo(queryindex)
             await client.send_message(message.channel, embed=formatskillembed(skill))
         except KeyError:
-            await client.send_message(message.channel, "Could not find a Skill entry with that name.")
+            await client.send_message(message.channel, "Could not find a Skill entry with that name")
     
     #STAGE
     if command == "stage":
@@ -332,7 +487,7 @@ async def on_message(message):
         
         elif stagetype == "eb":
             if querypokemon.lower() not in ebpokemon:
-                await client.send_message(message.channel, "Could not find an Escalation Battles with that Pokemon.")
+                await client.send_message(message.channel, "Could not find an Escalation Battles with that Pokemon")
                 return
             try:
                 querylevel = params[2]
@@ -373,7 +528,7 @@ async def on_message(message):
                 return
         
         else:
-            await client.send_message(message.channel, "Stage Type should be either 'main', 'expert', or 'event'.")
+            await client.send_message(message.channel, "Stage Type should be either 'main', 'expert', or 'event'")
             return
         
         if len(results) == 1:
@@ -387,7 +542,7 @@ async def on_message(message):
             indices = indices[:-2]
             await client.send_message(message.channel, "More than one result: {}".format(indices))
         else:
-            await client.send_message(message.channel, "Could not find a stage with that Pokemon or Stage Index.")
+            await client.send_message(message.channel, "Could not find a stage with that Pokemon or Stage Index")
     
     #EVENT
     if command == "event":
@@ -398,7 +553,7 @@ async def on_message(message):
             for result in results:
                 await client.send_message(message.channel, result.getFormattedData())
         except KeyError:
-            await client.send_message(message.channel, "Could not find an event with that Pokemon.")
+            await client.send_message(message.channel, "Could not find an event with that Pokemon")
     
     #QUERY
     if command == "query":
@@ -462,7 +617,12 @@ async def on_message(message):
             await client.send_message(message.channel, embed=formatebrewardsembed(ebrewards))
             
         except KeyError:
-            await client.send_message(message.channel, "No Escalation Battles found with that Pokemon name.")
+            await client.send_message(message.channel, "No Escalation Battles found with that Pokemon name")
+
+################
+#MISC FUNCTIONS#
+################
+#To help reduce code clutter
 
 #DISRUPTION COUNTERS
 #Returns a count of disruptions in disruption patterns, used as a way of shorthand description
