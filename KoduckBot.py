@@ -417,13 +417,13 @@ async def on_message(message):
     
     #POKEMON
     if command == "pokemon":
-        querypokemon = params[0]
+        try:
+            querypokemon = aliases[params[0].lower()]
+        except KeyError:
+            querypokemon = params[0].lower()
         
         try:
-            try:
-                queryindex = pokemondict[aliases[querypokemon.lower()]]
-            except KeyError:
-                queryindex = pokemondict[querypokemon.lower()]
+            queryindex = pokemondict[querypokemon]
             pokemon = PokemonData.getPokemonInfo(queryindex)
             await client.send_message(message.channel, embed=formatpokemonembed(pokemon))
         
@@ -432,13 +432,13 @@ async def on_message(message):
     
     #SKILL
     if command == "skill":
-        queryskill = params[0]
+        try:
+            queryskill = aliases[params[0].lower()]
+        except KeyError:
+            queryskill = params[0].lower()
         
         try:
-            try:
-                queryindex = skilldict[aliases[queryskill.lower()]]
-            except KeyError:
-                queryindex = skilldict[queryskill.lower()]
+            queryindex = skilldict[queryskill]
             skill = PokemonAbility.getAbilityInfo(queryindex)
             await client.send_message(message.channel, embed=formatskillembed(skill))
         except KeyError:
@@ -448,7 +448,10 @@ async def on_message(message):
     if command == "stage":
         try:
             stagetype = params[0]
-            querypokemon = params[1]
+            try:
+                querypokemon = aliases[params[1].lower()]
+            except KeyError:
+                querypokemon = params[1].lower()
         except IndexError:
             await client.send_message(message.channel, "Needs two parameters: stagetype, index/pokemon")
             return
@@ -460,7 +463,7 @@ async def on_message(message):
                 results.append(sdataMain.getStageInfo(int(querypokemon)))
             else:
                 try:
-                    for index in mainstagedict[querypokemon.lower()]:
+                    for index in mainstagedict[querypokemon]:
                         results.append(sdataMain.getStageInfo(index))
                 except KeyError:
                     okay = "okay"
@@ -470,7 +473,7 @@ async def on_message(message):
                 results.append(sdataExpert.getStageInfo(int(querypokemon)))
             else:
                 try:
-                    for index in expertstagedict[querypokemon.lower()]:
+                    for index in expertstagedict[querypokemon]:
                         results.append(sdataExpert.getStageInfo(index))
                 except KeyError:
                     okay = "okay"
@@ -480,18 +483,18 @@ async def on_message(message):
                 results.append(sdataEvent.getStageInfo(int(querypokemon)))
             else:
                 try:
-                    for index in eventstagedict[querypokemon.lower()]:
+                    for index in eventstagedict[querypokemon]:
                         results.append(sdataEvent.getStageInfo(index))
                 except KeyError:
                     okay = "okay"
         
         elif stagetype == "eb":
-            if querypokemon.lower() not in ebpokemon:
+            if querypokemon not in ebpokemon:
                 await client.send_message(message.channel, "Could not find an Escalation Battles with that Pokemon")
                 return
             try:
                 querylevel = params[2]
-                ebstages = ebstagesdict[querypokemon.lower()]
+                ebstages = ebstagesdict[querypokemon]
                 stageindex = -1
                 
                 startlevel = querylevel
@@ -546,10 +549,13 @@ async def on_message(message):
     
     #EVENT
     if command == "event":
-        querypokemon = params[0]
+        try:
+            querypokemon = aliases[params[0]].lower()
+        except KeyError:
+            querypokemon = params[0].lower()
         
         try:
-            results = eventsdict[querypokemon.lower()]
+            results = eventsdict[querypokemon]
             for result in results:
                 await client.send_message(message.channel, result.getFormattedData())
         except KeyError:
@@ -610,11 +616,14 @@ async def on_message(message):
         await client.send_message(message.channel, outputstring)
     
     if command == "ebrewards":
-        querypokemon = params[0]
+        try:
+            querypokemon = aliases[params[0]].lower()
+        except KeyError:
+            querypokemon = params[0].lower()
         
         try:
-            ebrewards = ebrewardsdict[querypokemon.lower()]
-            await client.send_message(message.channel, embed=formatebrewardsembed(ebrewards))
+            ebrewards = ebrewardsdict[querypokemon]
+            await client.send_message(message.channel, embed=formatebrewardsembed(ebrewards, querypokemon))
             
         except KeyError:
             await client.send_message(message.channel, "No Escalation Battles found with that Pokemon name")
@@ -879,7 +888,7 @@ def formatstageembed(stage, stagetype, extra=""):
             embed.add_field(name="**Countdown {}**".format(i+1), value=cddisruptions[i], inline=False)
     return embed
 
-def formatebrewardsembed(ebrewards):
+def formatebrewardsembed(ebrewards, querypokemon):
     stats = ""
     for entry in ebrewards:
         stats += "Level {} reward: {} x{}\n".format(entry["level"], entry["item"], entry["itemamount"])
@@ -891,7 +900,7 @@ def formatebrewardsembed(ebrewards):
     stats = stats.replace("Heart", emojis["Heart"])
     stats = stats.replace("Jewel", emojis["Jewel"])
     
-    pokemonindex = pokemondict[querypokemon.lower()]
+    pokemonindex = pokemondict[querypokemon]
     pokemon = PokemonData.getPokemonInfo(pokemonindex)
     
     embed = discord.Embed(title="{} Escalation Battles Rewards".format(pokemon.fullname), color=0x4e7e4e, description=stats)
