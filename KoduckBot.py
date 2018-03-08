@@ -126,9 +126,14 @@ for eb in ebpokemon:
     lines = eventdetails.ebstring.split("\n")
     
     #each line is in the format "Level x: Stage Index y"
-    for line in lines:
-        temp = line.split(" ")
-        ebstagesdict[eb][temp[1][:-1]] = temp[4]
+    for i in range(len(lines)):
+        temp = lines[i].split(" ")
+        try:
+            temp2 = lines[i+1].split(" ")
+            nextlevel = temp2[1][:-1]
+        except:
+            nextlevel = "-1"
+        ebstagesdict[eb][temp[1][:-1]] = (temp[4], nextlevel)
 
 ##########
 #SETTINGS#
@@ -500,19 +505,11 @@ async def on_message(message):
                 startlevel = querylevel
                 while int(startlevel) > 0:
                     try:
-                        stageindex = ebstages[startlevel]
+                        stageindex = ebstages[startlevel][0]
+                        endlevel = str(int(ebstages[startlevel][1]) - 1)
                         break
                     except KeyError:
                         startlevel = str(int(startlevel) - 1)
-                
-                endlevel = str(int(querylevel) + 1)
-                while int(endlevel) < 502:
-                    try:
-                        whatever = ebstages[endlevel]
-                        endlevel = str(int(endlevel) - 1)
-                        break
-                    except KeyError:
-                        endlevel = str(int(endlevel) + 1)
                 
                 if stageindex != -1:
                     results.append(sdataEvent.getStageInfo(int(stageindex)))
@@ -624,6 +621,18 @@ async def on_message(message):
         try:
             ebrewards = ebrewardsdict[querypokemon]
             await client.send_message(message.channel, embed=formatebrewardsembed(ebrewards, querypokemon))
+            
+        except KeyError:
+            await client.send_message(message.channel, "No Escalation Battles found with that Pokemon name")
+    
+    if command == "eb":
+        try:
+            querypokemon = aliases[params[0]].lower()
+        except KeyError:
+            querypokemon = params[0].lower()
+        
+        try:
+            await client.send_message(message.channel, embed=formatebdetailsembed(querypokemon))
             
         except KeyError:
             await client.send_message(message.channel, "No Escalation Battles found with that Pokemon name")
@@ -862,7 +871,7 @@ def formatstageembed(stage, stagetype, extra=""):
                         cddisruptions[cdnum] += "{} x{}, ".format(item, value)
                 cddisruptions[cdnum] = cddisruptions[cdnum][:-2] + ")"
             elif disruption["value"] == 1:
-                cddisruptions[cdnum] += "\n- Mini Disruption Pattern ("
+                cddisruptions[cdnum] += "\n- {} area at {} (".format(targetarea, targettile)
                 dpdict = countDisruptionsMini(disruption["indices"])
                 for item in dpdict.keys():
                     if item == "Nothing" or item == "":
@@ -906,4 +915,31 @@ def formatebrewardsembed(ebrewards, querypokemon):
     embed = discord.Embed(title="{} Escalation Battles Rewards".format(pokemon.fullname), color=0x4e7e4e, description=stats)
     return embed
 
-client.run('NDE4MzMxMTU3MjY0OTkwMjA4.DXgBUA.t-yt_MVwLAykIsNSPgfNhUwY0Fg')
+def formatebdetailsembed(querypokemon):
+    stats = ""
+            
+    currentlevel = "1"
+    nextlevel = ""
+    
+    while nextlevel != "-1":
+        ebstageindex = ebstagesdict[querypokemon][currentlevel][0]
+        nextlevel = ebstagesdict[querypokemon][currentlevel][1]
+        ebstage = sdataEvent.getStageInfo(int(ebstageindex))
+        
+        if nextlevel == "-1":
+            levels = "**Levels {}+**".format(currentlevel)
+        elif nextlevel == str(int(currentlevel) + 1):
+            levels = "**Level {}**".format(currentlevel)
+        else:
+            levels = "**Levels {} to {}**".format(currentlevel, str(int(nextlevel) - 1))
+        
+        stats += "{}: {}{} / {}\n".format(levels, ebstage.hp, " + {}".format(ebstage.extrahp) if ebstage.extrahp != 0 else "", ebstage.seconds if ebstage.timed != 0 else ebstage.moves)
+        currentlevel = nextlevel
+    
+    pokemonindex = pokemondict[querypokemon]
+    pokemon = PokemonData.getPokemonInfo(pokemonindex)
+    
+    embed = discord.Embed(title="{} Escalation Battles Details".format(pokemon.fullname), color=0x4e7e4e, description=stats)
+    return embed
+
+client.run(sys.argv[1])
