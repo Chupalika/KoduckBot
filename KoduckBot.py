@@ -143,7 +143,7 @@ for eb in ebpokemon:
 #ALIASES
 def updatealiases():
     aliases.clear()
-    file = open("../namealiases.txt")
+    file = open("../namealiases.txt", encoding="utf8")
     filecontents = file.read()
     for line in filecontents.split("\n"):
         if line == "":
@@ -169,7 +169,7 @@ def updatealiases():
 def addalias(original, alias):
     if alias.lower() in aliases.keys():
         return -1
-    file = open("../namealiases.txt", "a")
+    file = open("../namealiases.txt", "a", encoding="utf8")
     file.write("\n{}\t{}".format(original, alias))
     file.close()
     aliases[alias.lower()] = original.lower()
@@ -214,8 +214,8 @@ global commandlocks
 commandlocks = {}
 updatecommandlocks()
 
-publiccommands = ["help", "addalias", "pokemon", "skill", "stage", "event", "query", "ebrewards"]
-admincommands = ["commandlock", "restrict"]
+publiccommands = ["help", "addalias", "pokemon", "skill", "stage", "event", "query", "ebrewards", "eb"]
+admincommands = ["commandlock", "restrict", "addresponse"]
 
 #ADMINS
 def updateadmins():
@@ -278,7 +278,7 @@ client = discord.Client()
 bot_prefix = "!"
 client = commands.Bot(command_prefix=bot_prefix)
 
-shuffleserver = []
+shuffleservers = []
 dropitems = {"0":"Nothing", "1":"RML", "2":"LU", "3":"EBS", "4":"EBM", "5":"EBL", "6":"SBS", "7":"SBM", "8":"SBL", "9":"SS", "10":"MSU", "11":"M+5", "12":"T+10", "13":"EXP", "14":"MS", "15":"C-1", "16":"DD", "17":"APU", "18":"Heart x1", "19":"Heart x2", "20":"Heart x5", "21":"Heart x3", "22":"Heart x20", "23":"Heart x10", "24":"Coin x100", "25":"Coin x300", "26":"Coin x1000", "27":"Coin x2000", "28":"Coin x200", "29":"Coin x400", "30":"Coin x5000", "31":"Jewel", "32":"PSB"}
 shorthanditems = {"Raise Max Level":"RML", "Level Up":"LU", "Exp. Booster S":"EBS", "Exp. Booster M":"EBM", "Exp. Booster L":"EBL", "Skill Booster S":"SBS", "Skill Booster M":"SBM", "Skill Booster L":"SBL", "Skill Swapper":"SS", "Mega Speedup":"MSU", "Moves +5":"M+5", "Time +10":"T+10", "Exp. Points x1.5":"EXP", "Mega Start":"MS", "Complexity -1":"C-1", "Disruption Delay":"DD", "Attack Power ↑":"APU", "Skill Booster":"PSB"}
 typecolor = {"Normal":0xa8a878, "Fire":0xf08030, "Water":0x6890f0, "Grass":0x78c850, "Electric":0xf8d030, "Ice":0x98d8d8, "Fighting":0xc03028, "Poison":0xa040a0, "Ground":0xe0c068, "Flying":0xa890f0, "Psychic":0xf85888, "Bug":0xa8b820, "Rock":0xb8a038, "Ghost":0x705898, "Dragon":0x7038f8, "Dark":0x705848, "Steel":0xb8b8d0, "Fairy":0xee99ac}
@@ -291,40 +291,65 @@ async def on_ready():
     print("ID: {}".format(client.user.id))
     
     for server in client.servers:
-        if server.name == "Shuffle Wikia":
-            shuffleserver.append(server)
+        if server.name == "KoduckBot Beta Testers" or server.name.startswith("Pokemon Shuffle Icons"):
+            shuffleservers.append(server)
             for emoji in server.emojis:
-                emojis[emoji.name] = "<:{}:{}>".format(emoji.name, emoji.id)
-            break
+                emojis[emoji.name] = "<:{}:{}>".format(emoji.name, emoji.id)  
+    
+    print("Shuffle Servers: {}".format(", ".join([x.name for x in shuffleservers])))
 
 @client.command(pass_context=True)
 async def ping(ctx):
     await client.say("pong")
 
 #MISC RESPONSES
+def updateresponses():
+    responses.clear()
+    file = open("../responses.txt", encoding="utf8")
+    filecontents = file.read()
+    for line in filecontents.split("\n"):
+        if line == "":
+            continue
+        message = line.split("\t")[0]
+        response = line.split("\t")[1]
+        responses[message] = response
+    file.close()
+
+def addresponse(message, response):
+    if message not in responses.keys():
+        responses[message] = response
+    else:
+        return -1
+    
+    file = open("../responses.txt", "a", encoding="utf8")
+    file.write("\n{}\t{}".format(message, response))
+    file.close()
+    return 0
+
+global responses
 responses = {}
-responses["\\o\\"] = "/o/"
-responses["/o/"] = "\\o\\"
-responses["\\o/"] = "/o\\"
-responses["/o\\"] = "\\o/"
-responses["(╯°□°）╯︵ ┻━┻"] = "┬─┬ ノ( ゜-゜ノ)"
-responses[b'\xf0\x9f\x90\xb2'.decode("utf-8")] = b'\xf0\x9f\x90\xb2'.decode("utf-8")
+updateresponses()
 
 ##############
 #INPUT OUTPUT#
 ##############
 @client.event
 async def on_message(message):
+    #ignore bot messages
+    if message.author.bot:
+        return
+    
     #MISC
-    if message.content in responses.keys() and message.author.id != client.user.id:
+    if message.content in responses.keys():
         tts = False
-        #if message.content == b'\xf0\x9f\x90\xb2'.decode("utf-8"):
-        #    tts = True
+        if message.content == b'\xf0\x9f\x90\xb2'.decode("utf-8"):
+            tts = True
         await client.send_message(message.channel, responses[message.content], tts=tts)
     
+    #parse command and parameters
     command = ""
     params = []
-    if message.content.startswith(commandprefix) and message.author.id != client.user.id:
+    if message.content.startswith(commandprefix):
         try:
             command = message.content[len(commandprefix):message.content.index(" ")]
             params = message.content[message.content.index(" ")+1:].split(paramdelim)
@@ -333,6 +358,7 @@ async def on_message(message):
     else:
         return
     
+    #stop if admin or locked command executed by non-admin or restricted user
     if command in admincommands and message.author.id not in admins:
         await client.send_message(message.channel, "This command can only be used by KoduckBot admins")
         return
@@ -342,17 +368,26 @@ async def on_message(message):
             return
     except KeyError:
         okay = "okay"
+    if message.author.id in restrictedusers:
+        await client.send_message(message.channel, "You are currently restricted from using KoduckBot commands")
+        return
     
     #TEST
     if command == "test":
-        imglist = os.listdir("../Icons")
-        imglist = ["../Icons/" + name for name in imglist]
+        imglist = os.listdir("../Icons2")
+        imglist = ["../Icons2/" + name for name in imglist]
+        
+        print(imglist)
+        print("uploading emojis to {}".format(shuffleservers[int(params[0])]))
         
         for img in imglist:
+            emojiname = strippunctuation(img[10:-4])
+            print("uploading {} as {}".format(img, emojiname))
             with open(img, "rb") as image:
                 image_bytes = image.read()
-                await client.create_custom_emoji(shuffleserver[0], name=img[9:-4], image=image_bytes)
+                await client.create_custom_emoji(shuffleservers[int(params[0])], name=emojiname, image=image_bytes)
     
+    #HELP
     if command == "help":
         returnmessage = "This is a bot that provides Pokemon Shuffle data grabbed directly from the game files!\nExample commands:\n"
         returnmessage += "{}pokemon bulbasaur\n".format(commandprefix)
@@ -364,9 +399,13 @@ async def on_message(message):
         returnmessage += "{}event wobbuffet (male)\n".format(commandprefix)
         returnmessage += "{}query type=grass{}bp=40{}rml=20{}skill=power of 4{}ss=mega boost+\n".format(commandprefix, paramdelim, paramdelim, paramdelim, paramdelim)
         returnmessage += "{}query maxap=105{}skillss=shot out\n".format(commandprefix, paramdelim)
-        returnmessage += "{}ebrewards volcanion".format(commandprefix)
+        returnmessage += "{}ebrewards volcanion\n".format(commandprefix)
+        returnmessage += "{}eb volcanion\n".format(commandprefix)
+        returnmessage += "{}week 5\n".format(commandprefix)
+        returnmessage += "{}addalias Primal Kyogre{}PKyo".format(commandprefix, paramdelim)
         await client.send_message(message.channel, returnmessage)
     
+    #Admin commands
     if command == "updatealiases" and message.author.id == masteradmin:
         updatealiases()
     
@@ -402,11 +441,14 @@ async def on_message(message):
         updateadmins()
     
     if command == "addadmin" and message.author.id == masteradmin:
-        returnvalue = addadmin(message.mentions[0].id)
-        if returnvalue == 0:
-            await client.send_message(message.channel, "<@!{}> is now a KoduckBot admin!".format(message.mentions[0].id))
-        elif returnvalue == -1:
-            await client.send_message(message.channel, "That user is already a KoduckBot admin")
+        try:
+            returnvalue = addadmin(message.mentions[0].id)
+            if returnvalue == 0:
+                await client.send_message(message.channel, "<@!{}> is now a KoduckBot admin!".format(message.mentions[0].id))
+            elif returnvalue == -1:
+                await client.send_message(message.channel, "That user is already a KoduckBot admin")
+        except IndexError:
+            await client.send_message(message.channel, "I need a mentioned user!")
     
     if command == "updaterestrictedusers" and message.author.id == masteradmin:
         updaterestrictedusers()
@@ -419,6 +461,22 @@ async def on_message(message):
             await client.send_message(message.channel, "That user is already restricted")
         elif returnvalue == -2:
             await client.send_message(message.channel, "KoduckBot admins cannot be restricted")
+    
+    if command == "updateresponses" and message.author.id == masteradmin:
+        updateresponses()
+    
+    if command == "addresponse":
+        try:
+            THEmessage = params[0]
+            THEresponse = params[1]
+        except IndexError:
+            await client.send_message(message.channel, "Need two parameters: message, response")
+            return
+        returnvalue = addresponse(THEmessage, THEresponse)
+        if returnvalue == 0:
+            await client.send_message(message.channel, "Successfully added a response")
+        elif returnvalue == -1:
+            await client.send_message(message.channel, "That message already has a response")
     
     #POKEMON
     if command == "pokemon":
@@ -451,13 +509,17 @@ async def on_message(message):
     
     #STAGE
     if command == "stage":
-        try:
+        if len(params) >= 2:
             stagetype = params[0]
             try:
                 querypokemon = aliases[params[1].lower()]
             except KeyError:
                 querypokemon = params[1].lower()
-        except IndexError:
+        #special exception here
+        elif len(params) == 1 and params[0].find(" ") != -1:
+            stagetype = params[0][0:params[0].find(" ")]
+            querypokemon = params[0][params[0].find(" ")+1:].lower()
+        else:
             await client.send_message(message.channel, "Needs two parameters: stagetype, index/pokemon")
             return
         
@@ -465,7 +527,11 @@ async def on_message(message):
         
         if stagetype == "main":
             if querypokemon.isdigit():
-                results.append(sdataMain.getStageInfo(int(querypokemon)))
+                try:
+                    results.append(sdataMain.getStageInfo(int(querypokemon)))
+                except IndexError:
+                    await client.send_message(message.channel, "Main Stages range from 1 to 700")
+                    return
             else:
                 try:
                     for index in mainstagedict[querypokemon]:
@@ -475,7 +541,11 @@ async def on_message(message):
         
         elif stagetype == "expert":
             if querypokemon.isdigit():
-                results.append(sdataExpert.getStageInfo(int(querypokemon)))
+                try:
+                    results.append(sdataExpert.getStageInfo(int(querypokemon)))
+                except IndexError:
+                    await client.send_message(message.channel, "Expert Stages range from 0 to 52")
+                    return
             else:
                 try:
                     for index in expertstagedict[querypokemon]:
@@ -485,7 +555,11 @@ async def on_message(message):
         
         elif stagetype == "event":
             if querypokemon.isdigit():
-                results.append(sdataEvent.getStageInfo(int(querypokemon)))
+                try:
+                    results.append(sdataEvent.getStageInfo(int(querypokemon)))
+                except:
+                    await client.send_message(message.channel, "Event Stages range from 0 to 715")
+                    return
             else:
                 try:
                     for index in eventstagedict[querypokemon]:
@@ -542,7 +616,7 @@ async def on_message(message):
             indices = indices[:-2]
             await client.send_message(message.channel, "More than one result: {}".format(indices))
         else:
-            await client.send_message(message.channel, "Could not find a stage with that Pokemon or Stage Index")
+            await client.send_message(message.channel, "Could not find a stage with that Pokemon")
     
     #EVENT
     if command == "event":
@@ -636,6 +710,92 @@ async def on_message(message):
             
         except KeyError:
             await client.send_message(message.channel, "No Escalation Battles found with that Pokemon name")
+    
+    if command == "week":
+        queryweek = params[0]
+        
+        comp = ""
+        daily = ""
+        oad = ""
+        gc = ""
+        eb = ""
+        safari = ""
+        
+        for i in range(eventBin.num_records):
+            snippet = eventBin.getRecord(i)
+            event = EventDetails(i, snippet, sdataEvent)
+            
+            if event.repeattype != 1:
+                continue
+            if event.repeatparam1+1 != int(queryweek):
+                continue
+            
+            dropsstring = ""
+            attemptcoststring = ""
+            unlockcoststring = ""
+            
+            if (event.stage.drop1item != 0 or event.stage.drop2item != 0 or event.stage.drop3item != 0):
+                try:
+                    drop1item = emojis[dropitems[str(event.stage.drop1item)].replace(".", "").replace("-", "").replace("+", "")]
+                except KeyError:
+                    drop1item = dropitems[str(event.stage.drop1item)].replace("Heart", emojis["Heart"]).replace("Coin", emojis["Coin"])
+                try:
+                    drop2item = emojis[dropitems[str(event.stage.drop2item)].replace(".", "").replace("-", "").replace("+", "")]
+                except KeyError:
+                    drop2item = dropitems[str(event.stage.drop2item)].replace("Heart", emojis["Heart"]).replace("Coin", emojis["Coin"])
+                try:
+                    drop3item = emojis[dropitems[str(event.stage.drop3item)].replace(".", "").replace("-", "").replace("+", "")]
+                except KeyError:
+                    drop3item = dropitems[str(event.stage.drop3item)].replace("Heart", emojis["Heart"]).replace("Coin", emojis["Coin"])
+                dropsstring += " [{} {}% / {} {}% / {} {}%]".format(drop1item, str(100/pow(2,event.stage.drop1rate-1)), drop2item, str(100/pow(2,event.stage.drop2rate-1)), drop3item, str(100/pow(2,event.stage.drop3rate-1)))
+            if event.stage.attemptcost != 1 or event.stage.costtype != 0:
+                attemptcoststring += " ({} x{})".format(emojis[["Heart", "Coin"][event.stage.costtype]], event.stage.attemptcost)
+            if event.unlockcost != 0:
+                unlockcoststring += " ({} x{})".format(emojis[["Coin", "Jewel"][event.unlockcosttype]], event.unlockcost)
+            
+            if event.stagetype == 1:
+                gc += "- {}{}{}{}\n".format(event.stagepokemon[0], dropsstring, attemptcoststring, unlockcoststring)
+            
+            if event.stagetype == 2:
+                duplicatesremoved = []
+                for p in event.stagepokemon:
+                    if p not in duplicatesremoved:
+                        duplicatesremoved.append(p)
+                if len(duplicatesremoved) == 1:
+                    oad += "- {}{}{}".format(event.stagepokemon[0], dropsstring, attemptcoststring)
+                else:
+                    daily += "- {}, {}, {}, {}, {}{}".format(event.stagepokemon[0], event.stagepokemon[1], event.stagepokemon[2], event.stagepokemon[3], event.stagepokemon[4], dropsstring)
+            
+            if event.stagetype == 5:
+                if comp == "":
+                    temp = ""
+                    for item in event.stage.items:
+                        temp += emojis[item.replace(".", "").replace("-", "").replace("+", "")]
+                    comp += "- {} ({})".format(event.stagepokemon[0], temp)
+            
+            if event.stagetype == 6:
+                eb += "- {}{}".format(event.stagepokemon[0], dropsstring)
+            
+            if event.stagetype == 7:
+                totalvalue = sum(event.extravalues)
+                safari += "- "
+                for j in range(len(event.stages)):
+                    p = event.stages[j].pokemon.fullname
+                    safari += "{} ({:0.2f}%), ".format(p, float(event.extravalues[j] * 100) / totalvalue)
+                safari = safari[:-2]
+                safari += dropsstring
+        
+        embed = discord.Embed(title="Event Rotation Week {}".format(queryweek), color=0xff0000)
+        if comp != "":
+            embed.add_field(name="Competitive Stage", value=comp, inline=False)
+        embed.add_field(name="Challenges", value=gc, inline=False)
+        if eb != "":
+            embed.add_field(name="Escalation Battles", value=eb, inline=False)
+        if safari != "":
+            embed.add_field(name="Safari", value=safari, inline=False)
+        embed.add_field(name="One Chance a Day!", value=oad, inline=False)
+        embed.add_field(name="Daily", value=daily, inline=False)
+        await client.send_message(message.channel, embed=embed)
 
 ################
 #MISC FUNCTIONS#
@@ -715,7 +875,7 @@ def formatskillembed(skill):
     return embed
 
 def formatstageembed(stage, stagetype, extra=""):
-    stats = "**HP**: {}".format(stage.hp)
+    stats = "**HP**: {}{}".format(stage.hp, " (UX: {})".format(stage.hp * 3) if stagetype == "main" and stage.ispuzzlestage == 0 else "")
     if stage.extrahp != 0:
         stats += " + {}".format(stage.extrahp)
     stats += "\n**{}**: {}\n**Experience**: {}\n**Catchability**: {}% + {}%/{}\n**Default Supports**: {}\n**Rank Requirements**: {} / {} / {}\n**Attempt Cost**: {} x{}".format("Moves" if stage.timed == 0 else "Seconds", stage.moves if stage.timed == 0 else stage.seconds, stage.exp, stage.basecatch, stage.bonuscatch, "move" if stage.timed == 0 else "3sec", ", ".join(stage.defaultsupports), stage.srank, stage.arank, stage.brank, emojis[["Heart","Coin"][stage.costtype]], stage.attemptcost)
@@ -856,7 +1016,10 @@ def formatstageembed(stage, stagetype, extra=""):
                 numitems += 1
             disruptstring = ""
             for key in dict.keys():
-                disruptstring += "{} x{}, ".format(key, str(dict[key]))
+                try:
+                    disruptstring += "{} x{}, ".format(emojis[strippunctuation(key)], str(dict[key]))
+                except KeyError:
+                    disruptstring += "{} x{}, ".format(key, str(dict[key]))
             disruptstring = disruptstring[:-2]
             
             if disruption["value"] == 25:
@@ -868,7 +1031,11 @@ def formatstageembed(stage, stagetype, extra=""):
                         continue
                     else:
                         value = dpdict[item]
-                        cddisruptions[cdnum] += "{} x{}, ".format(item, value)
+                        item = item.replace("Itself", stage.pokemon.fullname)
+                        try:
+                            cddisruptions[cdnum] += "{} x{}, ".format(emojis[strippunctuation(item)], value)
+                        except KeyError:
+                            cddisruptions[cdnum] += "{} x{}, ".format(item, value)
                 cddisruptions[cdnum] = cddisruptions[cdnum][:-2] + ")"
             elif disruption["value"] == 1:
                 cddisruptions[cdnum] += "\n- {} area at {} (".format(targetarea, targettile)
@@ -878,22 +1045,35 @@ def formatstageembed(stage, stagetype, extra=""):
                         continue
                     else:
                         value = dpdict[item]
-                        cddisruptions[cdnum] += "{} x{}, ".format(item, value)
+                        item = item.replace("Itself", stage.pokemon.fullname)
+                        try:
+                            cddisruptions[cdnum] += "{} x{}, ".format(emojis[strippunctuation(item)], value)
+                        except KeyError:
+                            cddisruptions[cdnum] += "{} x{}, ".format(item, value)
                 cddisruptions[cdnum] = cddisruptions[cdnum][:-2] + ")"
             elif disruption["value"] == 0:
-                cddisruptions[cdnum] += "\n- {} x1".format(items[0]).replace("Itself", stage.pokemon.fullname)
+                try:
+                    cddisruptions[cdnum] += "\n- {} x1".format(emojis[strippunctuation(items[0].replace("Itself", stage.pokemon.fullname))])
+                except KeyError:
+                    cddisruptions[cdnum] += "\n- {} x1".format(items[0]).replace("Itself", stage.pokemon.fullname)
             elif disruption["value"] <= 12:
-                cddisruptions[cdnum] += "\n- {}".format(disruptstring).replace("Itself", stage.pokemon.fullname)
+                try:
+                    cddisruptions[cdnum] += "\n- {}".format(disruptstring).replace("Itself", emojis[strippunctuation(stage.pokemon.fullname)])
+                except KeyError:
+                    cddisruptions[cdnum] += "\n- {}".format(disruptstring).replace("Itself", stage.pokemon.fullname)
             elif disruption["value"] <= 24:
-                cddisruptions[cdnum] += "\n- {}".format(disruptstring).replace("Itself", stage.pokemon.fullname)
+                try:
+                    cddisruptions[cdnum] += "\n- {}".format(disruptstring).replace("Itself", emojis[strippunctuation(stage.pokemon.fullname)])
+                except KeyError:
+                    cddisruptions[cdnum] += "\n- {}".format(disruptstring).replace("Itself", stage.pokemon.fullname)
             else:
                 cddisruptions[cdnum] += "\n- ???"
     
     embed = discord.Embed(title="{} Stage Index {}: {}{}".format(stagetype.capitalize(), stage.index, stage.pokemon.fullname, extra), color=typecolor[stage.pokemon.type], description=stats)
+    #embed.set_author(name=stage.pokemon.fullname, icon_url="https://raw.githubusercontent.com/Chupalika/Kaleo/icons/Icons/{}.png".format(stage.pokemon.fullname))
     embed.set_thumbnail(url="https://raw.githubusercontent.com/Chupalika/Kaleo/icons/{} Stages Layouts/Layout Index {}.png".format(stagetype.capitalize(), stage.layoutindex).replace(" ", "%20"))
     for i in range(len(cddisruptions)):
         if cddisruptions[i] != "":
-            cddisruptions[i] = cddisruptions[i].replace("Rock", emojis["Rock"]).replace("Block", emojis["Block"]).replace("Barrier", emojis["Barrier"]).replace("Black Cloud", emojis["BlackCloud"])
             embed.add_field(name="**Countdown {}**".format(i+1), value=cddisruptions[i], inline=False)
     return embed
 
@@ -941,5 +1121,8 @@ def formatebdetailsembed(querypokemon):
     
     embed = discord.Embed(title="{} Escalation Battles Details".format(pokemon.fullname), color=0x4e7e4e, description=stats)
     return embed
+
+def strippunctuation(string):
+    return string.replace(" ", "").replace("(", "").replace(")", "").replace("-", "").replace("'", "").replace("é", "e").replace(".", "").replace("%", "")
 
 client.run(sys.argv[1])

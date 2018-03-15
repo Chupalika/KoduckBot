@@ -92,6 +92,7 @@ class EventDetails:
             except IndexError:
                 pass #it's possible if the index is crowded we could run off the end, reading garbage data, and crash. This prevents the crash, but not the garbage data read. It's a pretty unlikely edge case anyway.
             self.stagepokemon = [self.stages[0].pokemon.fullname]
+            self.stage = self.stages[0]
             
             #ESCALATION
             if self.stagetype == 6:
