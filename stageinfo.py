@@ -309,7 +309,9 @@ class StageDataRecord:
         #determine a few values
         if self.megapokemon == 1:
             self.pokemonindex += 1024
-        self.pokemon = PokemonData.getPokemonInfo(self.pokemonindex, extra=extra)
+        #this messes things up when trying to access both 3ds and mobile files, since pokemon are the same across both platforms, we can just pull from 3ds files
+        #self.pokemon = PokemonData.getPokemonInfo(self.pokemonindex, extra=extra)
+        self.pokemon = PokemonData.getPokemonInfo(self.pokemonindex)
         
         try:
             self.soundtrack = soundtracks[str(self.trackid)]

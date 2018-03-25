@@ -48,6 +48,7 @@ Temporary Items
 
 appoutput/
 output/
+output_mobile/
 Icons/
 __pycache__/
 *.bak
