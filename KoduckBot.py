@@ -8,39 +8,28 @@ from pokemoninfo import *
 from stageinfo import *
 from miscdetails import *
 from bindata import *
+import settings
+import datetime
 
 #KALEO SETUP
-BinStorage.workingdirs["ext"] = os.path.abspath("output_mobile")
-BinStorage.workingdirs["app"] = os.path.abspath("appoutput")
+BinStorage.workingdirs["ext"] = os.path.abspath(settings.extradatafoldermobile)
+BinStorage.workingdirs["app"] = os.path.abspath(settings.appdatafolder)
 
-sdataMainMobile = StageData("Configuration Tables/stageData.bin")
-sdataExpertMobile = StageData("Configuration Tables/stageDataExtra.bin")
-sdataEventMobile = StageData("Configuration Tables/stageDataEvent.bin")
+sdataMainMobile = StageData(settings.stagedatamainfilemobile)
+sdataExpertMobile = StageData(settings.stagedataexpertfilemobile)
+sdataEventMobile = StageData(settings.stagedataeventfilemobile)
 
 os.chdir("..")
-BinStorage.workingdirs["ext"] = os.path.abspath("output")
+BinStorage.workingdirs["ext"] = os.path.abspath(settings.extradatafolder)
 
-sdataMain = StageData("Configuration Tables/stageData.bin")
-sdataExpert = StageData("Configuration Tables/stageDataExtra.bin")
-sdataEvent = StageData("Configuration Tables/stageDataEvent.bin")
-dpdata = DisruptionPattern("Configuration Tables/bossActionStageLayout.bin")
+sdataMain = StageData(settings.stagedatamainfile)
+sdataExpert = StageData(settings.stagedataexpertfile)
+sdataEvent = StageData(settings.stagedataeventfile)
 
-eventBin = BinStorage("Configuration Tables/eventStage.bin")
-ebrewardsBin = BinStorage("Configuration Tables/stagePrizeEventLevel.bin")
+dpdata = DisruptionPattern(settings.disruptionpatternfile)
 
-#SETTINGS
-botname = "KoduckBot"
-adminsfile = "admins.txt"
-aliasesfile = "namealiases.txt"
-commandlocksfile = "commandlocks.txt"
-logfile = "log.txt"
-responsesfile = "responses.txt"
-restrictedusersfile = "restrictedusers.txt"
-otherservernames = ["KoduckBot Beta Testers", "/r/PokemonShuffle", "ren day"]
-publiccommands = ["help", "addalias", "listaliases", "oops", "pokemon", "dex", "skill", "stage", "event", "query", "ebrewards", "eb", "week"]
-admincommands = ["commandlock", "restrict", "addresponse"]
-masteradmincommands = ["updateadmins", "updatealiases", "updatecommandlocks", "addadmin", "updaterestrictedusers", "updateresponses"]
-masteradmin = "132675899265908738"
+eventBin = BinStorage(settings.eventsfile)
+ebrewardsBin = BinStorage(settings.ebrewardsfile)
 
 #MISC FUNCTIONS
 def strippunctuation(string):
@@ -53,21 +42,26 @@ def removeduplicates(list):
             ans.append(item)
     return ans
 
-def log(message, result):
-    file = open("../" + logfile, "a", encoding="utf8")
-    file.write("\n#{} {} {}: {} [{}]".format(message.channel.name, message.timestamp.strftime("%Y-%m-%d %H:%M:%S"), message.author.name, message.content, result))
+def log(message, logresult):
+    logmessage = message.content
+    #don't want too much content in logs...
+    if len(logmessage) > settings.logresultcharlimit:
+        logmessage = settings.message_messagetoolong
+    if len(logresult) > settings.logmessagecharlimit:
+        logresult = ""
+    
+    file = open("../" + settings.logfile, "a", encoding="utf8")
+    file.write("\n#{} {} {}: {} [{}]".format(message.channel.name, message.timestamp.strftime("%Y-%m-%d %H:%M:%S"), message.author.name, logmessage, logresult))
     file.close()
     return
 
 async def sendmessage(receivemessage, sendcontent="", sendembed=None):
     THEmessage = await client.send_message(receivemessage.channel, sendcontent, embed=sendembed)
     userlastoutput[receivemessage.author.id] = THEmessage
+    global lastmessageDT
+    lastmessageDT = datetime.datetime.now()
     
-    #don't want too much content in logs...
-    if len(sendcontent) <= 100:
-        log(receivemessage, sendcontent)
-    else:
-        log(receivemessage, "")
+    log(receivemessage, sendcontent)
     return True
 
 ####################
@@ -77,22 +71,22 @@ async def sendmessage(receivemessage, sendcontent="", sendembed=None):
 
 #POKEMON DICTIONARY
 pokemondict = {}
-for i in range(1, 1023):
+for i in range(settings.pokemonindices[0], settings.pokemonindices[1]):
     pokemon = PokemonData.getPokemonInfo(i)
     pokemondict[pokemon.fullname.lower()] = i
-for i in range(1031, 1094):
+for i in range(settings.megapokemonindices[0], settings.megapokemonindices[1]):
     pokemon = PokemonData.getPokemonInfo(i)
     pokemondict[pokemon.fullname.lower()] = i
 
 #SKILL DICTIONARY
 skilldict = {}
-for i in range(1, 164):
+for i in range(settings.skillindices[0], settings.skillindices[1]):
     skill = PokemonAbility.getAbilityInfo(i)
     skilldict[skill.name.lower()] = i
 
 #MAIN STAGES DICTIONARY
 mainstagedict = {}
-i = 0
+i = 1
 while True:
     try:
         stage = sdataMain.getStageInfo(i)
@@ -190,7 +184,7 @@ for eb in ebpokemon:
 #ALIASES
 def updatealiases():
     aliases.clear()
-    file = open("../" + aliasesfile, encoding="utf8")
+    file = open("../" + settings.aliasesfile, encoding="utf8")
     filecontents = file.read()
     for line in filecontents.split("\n"):
         if line == "":
@@ -201,7 +195,7 @@ def updatealiases():
     file.close()
     
     #Mega Something
-    for i in range(1031, 1094):
+    for i in range(settings.megapokemonindices[0], settings.megapokemonindices[1]):
         pokemon = PokemonData.getPokemonInfo(i)
         
         if pokemon.modifier != "":
@@ -218,7 +212,7 @@ def updatealiases():
             aliases[strippunctuation(pokemon.name).lower()] = pokemon.fullname.lower()
     
     #Wankers and Alolans and Shinies and punctuationless
-    for i in range(1, 1023):
+    for i in range(settings.pokemonindices[0], settings.pokemonindices[1]):
         pokemon = PokemonData.getPokemonInfo(i)
         
         if pokemon.modifier != "":
@@ -242,7 +236,7 @@ def updatealiases():
             aliases[strippunctuation(pokemon.fullname).lower()] = pokemon.fullname.lower()
     
     #Skills
-    for i in range(1, 164):
+    for i in range(settings.skillindices[0], settings.skillindices[1]):
         skill = PokemonAbility.getAbilityInfo(i)
         if skill.name.find(" ") != -1:
             aliases[skill.name.replace(" ", "").lower()] = skill.name.lower()
@@ -250,7 +244,7 @@ def updatealiases():
 def addalias(original, alias):
     if alias.lower() in aliases.keys():
         return -1
-    file = open("../" + aliasesfile, "a", encoding="utf8")
+    file = open("../" + settings.aliasesfile, "a", encoding="utf8")
     file.write("\n{}\t{}".format(original, alias))
     file.close()
     aliases[alias.lower()] = original.lower()
@@ -264,7 +258,7 @@ updatealiases()
 #This holds info on which commands are locked on which channels
 def updatecommandlocks():
     commandlocks.clear()
-    file = open("../" + commandlocksfile)
+    file = open("../" + settings.commandlocksfile)
     filecontents = file.read()
     for line in filecontents.split("\n"):
         if line == "":
@@ -286,7 +280,7 @@ def addcommandlock(command, channelid):
     else:
         commandlocks[command].append(channelid)
     
-    file = open("../" + commandlocksfile, "a")
+    file = open("../" + settings.commandlocksfile, "a")
     file.write("\n{}\t{}".format(command, channelid))
     file.close()
     return 0
@@ -298,7 +292,7 @@ updatecommandlocks()
 #ADMINS
 def updateadmins():
     admins.clear()
-    file = open("../" + adminsfile)
+    file = open("../" + settings.adminsfile)
     filecontents = file.read()
     for line in filecontents.split("\n"):
         if line == "":
@@ -309,7 +303,7 @@ def updateadmins():
 def addadmin(userid):
     if userid in admins:
         return -1
-    file = open("../" + adminsfile, "a")
+    file = open("../" + settings.adminsfile, "a")
     file.write("\n{}".format(userid))
     file.close()
     admins.append(userid)
@@ -322,7 +316,7 @@ updateadmins()
 #RESTRICTED USERS
 def updaterestrictedusers():
     restrictedusers.clear()
-    file = open("../" + restrictedusersfile)
+    file = open("../" + settings.restrictedusersfile)
     filecontents = file.read()
     for line in filecontents.split("\n"):
         if line == "":
@@ -335,7 +329,7 @@ def addrestricteduser(userid):
         return -1
     elif userid in admins:
         return -2
-    file = open("../" + restrictedusersfile, "a")
+    file = open("../" + settings.restrictedusersfile, "a")
     file.write("\n{}".format(userid))
     file.close()
     restrictedusers.append(userid)
@@ -348,7 +342,7 @@ updaterestrictedusers()
 #MISC RESPONSES
 def updateresponses():
     responses.clear()
-    file = open("../" + responsesfile, encoding="utf8")
+    file = open("../" + settings.responsesfile, encoding="utf8")
     filecontents = file.read()
     for line in filecontents.split("\n"):
         if line == "":
@@ -364,7 +358,7 @@ def addresponse(message, response):
     else:
         return -1
     
-    file = open("../" + responsesfile, "a", encoding="utf8")
+    file = open("../" + settings.responsesfile, "a", encoding="utf8")
     file.write("\n{}\t{}".format(message, response))
     file.close()
     return 0
@@ -376,9 +370,6 @@ updateresponses()
 ###################
 #DISCORD BOT SETUP#
 ###################
-commandprefix = "?"
-paramdelim = ", "
-
 client = discord.Client()
 
 shuffleservers = []
@@ -387,6 +378,10 @@ shorthanditems = {"Raise Max Level":"RML", "Level Up":"LU", "Exp. Booster S":"EB
 typecolor = {"Normal":0xa8a878, "Fire":0xf08030, "Water":0x6890f0, "Grass":0x78c850, "Electric":0xf8d030, "Ice":0x98d8d8, "Fighting":0xc03028, "Poison":0xa040a0, "Ground":0xe0c068, "Flying":0xa890f0, "Psychic":0xf85888, "Bug":0xa8b820, "Rock":0xb8a038, "Ghost":0x705898, "Dragon":0x7038f8, "Dark":0x705848, "Steel":0xb8b8d0, "Fairy":0xee99ac}
 emojis = {}
 userlastoutput = {}
+global lastmessageDT
+lastmessageDT = datetime.datetime.now()
+global currentweek
+currentweek = settings.currentweek
 
 @client.event
 async def on_ready():
@@ -395,9 +390,9 @@ async def on_ready():
     print("ID: {}".format(client.user.id))
     
     for server in client.servers:
-        if server.name.startswith("Pokemon Shuffle Icons") or server.name in otherservernames:
+        if server.name.startswith("Pokemon Shuffle Icons") or server.name in settings.otherservernames:
             shuffleservers.append(server)
-            if server.name == "/r/PokemonShuffle":
+            if server.name in settings.ignoreemojiservers:
                 continue
             for emoji in server.emojis:
                 emojis[emoji.name.lower()] = "<:{}:{}>".format(emoji.name, emoji.id)  
@@ -417,37 +412,52 @@ async def on_message(message):
     if message.server not in shuffleservers:
         return
     
+    #calculate time between last bot output and this message
+    global lastmessageDT
+    TD = datetime.datetime.now() - lastmessageDT
+    cooldownactive = ((TD.microseconds / 1000) + (TD.seconds * 1000) < settings.cooldown)
+    
+    global currentweek
+    
     try:
         #RESPONSES
-        if message.content in responses.keys() and message.author.id != client.user.id:
-            return await sendmessage(message, sendcontent=responses[message.content])
+        if message.content in responses.keys() and message.author.id != client.user.id and message.author.id not in restrictedusers:
+            if cooldownactive:
+                return log(message, settings.message_cooldownactive)
+            else:
+                return await sendmessage(message, sendcontent=responses[message.content])
         
         #parse command and parameters
         command = ""
         params = []
-        if message.content.startswith(commandprefix):
+        if message.content.startswith(settings.commandprefix):
             try:
-                command = message.content[len(commandprefix):message.content.index(" ")]
-                params = message.content[message.content.index(" ")+1:].split(paramdelim)
+                command = message.content[len(settings.commandprefix):message.content.index(" ")]
+                params = message.content[message.content.index(" ")+1:].split(settings.paramdelim)
             except ValueError:
-                command = message.content[len(commandprefix):]
+                command = message.content[len(settings.commandprefix):]
         else:
             return
         
-        #stop if admin or locked command executed by non-admin or restricted user
-        if command in admincommands and message.author.id not in admins:
-            return await sendmessage(message, sendcontent="This command can only be used by {} admins".format(botname))
+        #ignore message if bot is on cooldown
+        if cooldownactive:
+            return log(message, settings.message_cooldownactive)
         
-        if command in masteradmincommands and message.author.id != masteradmin:
-            return log(message, "This command can only be used by the {} masteradmin".format(botname))
+        #stop if admin or locked command executed by non-admin or restricted user
+        if command in settings.admincommands and message.author.id not in admins:
+            return await sendmessage(message, sendcontent=settings.message_restrictedaccess)
+        
+        if command in settings.masteradmincommands and message.author.id != settings.masteradmin:
+            return log(message, settings.message_restrictedaccess2)
         
         try:
             if message.channel.id in commandlocks[command] and message.author.id not in admins:
-                return await sendmessage(message, sendcontent="This command is locked on this channel")
+                return await sendmessage(message, sendcontent=settings.message_commandlocked)
         except KeyError:
             okay = "okay"
-        if message.author.id in restrictedusers:
-            return await sendmessage(message, sendcontent="You are currently restricted from using {} commands".format(botname))
+        
+        if command in settings.publiccommands and message.author.id in restrictedusers:
+            return await sendmessage(message, sendcontent=settings.message_restricteduser)
         
         #TEST
         if command == "test":
@@ -487,18 +497,21 @@ async def on_message(message):
             updateresponses()
             return
         
+        if command == "currentweek":
+            currentweek = int(params[0])
+        
         if command == "addadmin":
             #need exactly one mentioned user (the order in the mentioned list is unreliable)
             if len(message.mentions) != 1:
-                return await sendmessage(message, sendcontent="I need a mentioned user")
+                return await sendmessage(message, sendcontent=settings.message_nomentioneduser)
             
             #action
             returnvalue = addadmin(message.mentions[0].id)
             
             if returnvalue == 0:
-                return await sendmessage(message, sendcontent="<@!{}> is now a {} admin!".format(message.mentions[0].id, botname))
+                return await sendmessage(message, sendcontent=settings.message_addadmin_success)
             elif returnvalue == -1:
-                return await sendmessage(message, sendcontent="That user is already a {} admin".format(botname))
+                return await sendmessage(message, sendcontent=settings.message_addadmin_failed)
         
         #ADMIN COMMANDS
         #COMMANDLOCK
@@ -507,35 +520,35 @@ async def on_message(message):
             try:
                 commandtolock = params[0]
             except IndexError:
-                return await sendmessage(message, sendcontent="I need a public command to lock")
+                return await sendmessage(message, sendcontent=settings.message_commandlock_noparam)
             
             #make sure it's a public command (admin commands won't matter anyway since admins bypass restrictions)
-            if commandtolock not in publiccommands:
-                return await sendmessage(message, sendcontent="{} is not a public command".format(commandtolock))
+            if commandtolock not in settings.publiccommands:
+                return await sendmessage(message, sendcontent=settings.message_commandlock_invalidparam.format(commandtolock))
             
             #action
             returnvalue = addcommandlock(commandtolock, message.channel.id)
             
             if returnvalue == 0:
-                return await sendmessage(message, sendcontent="{} is now locked on this channel".format(commandtolock))
+                return await sendmessage(message, sendcontent=settings.message_commandlock_success.format(commandtolock))
             elif returnvalue == -1:
-                return await sendmessage(message, sendcontent="{} is already locked on this channel".format(commandtolock))
+                return await sendmessage(message, sendcontent=settings.message_commandlock_failed.format(commandtolock))
         
         #RESTRICT
         if command == "restrict":
             #need exactly one mentioned user (the order in the mentioned list is unreliable)
             if len(message.mentions) != 1:
-                return await sendmessage(message, sendcontent="I need a mentioned user")
+                return await sendmessage(message, sendcontent=settings.message_nomentioneduser)
             
             #action
             returnvalue = addrestricteduser(message.mentions[0].id)
             
             if returnvalue == 0:
-                return await sendmessage(message, sendcontent="<@!{}> is now restricted from using {} commands".format(message.mentions[0].id, botname))
+                return await sendmessage(message, sendcontent=settings.message_restrict_success.format(message.mentions[0].id))
             elif returnvalue == -1:
-                return await sendmessage(message, sendcontent="That user is already restricted")
+                return await sendmessage(message, sendcontent=settings.message_restrict_failed)
             elif returnvalue == -2:
-                return await sendmessage(message, sendcontent="{} admins cannot be restricted".format(botname))
+                return await sendmessage(message, sendcontent=settings.message_restrict_failed2)
         
         #ADDRESPONSE
         if command == "addresponse":
@@ -544,90 +557,58 @@ async def on_message(message):
                 THEmessage = params[0]
                 THEresponse = params[1]
             except IndexError:
-                return await sendmessage(message, sendcontent="Need two parameters: message, response")
+                return await sendmessage(message, sendcontent=settings.message_addresponse_noparam)
             
             #action
             returnvalue = addresponse(THEmessage, THEresponse)
             
             if returnvalue == 0:
-                return await sendmessage(message, sendcontent="Successfully added a response")
+                return await sendmessage(message, sendcontent=settings.message_addresponse_success)
             elif returnvalue == -1:
-                return await sendmessage(message, sendcontent="That message already has a response")
+                return await sendmessage(message, sendcontent=settings.message_addresponse_failed)
         
         #REGULAR COMMANDS
         #HELP
         if command == "help":
             if len(params) == 0:
-                returnmessage = "This is a bot that provides Pokemon Shuffle data grabbed directly from the game files!\nAvailable commands:\n"
-                returnmessage += "**{}help <command>** - provides details of a command if given, otherwise shows this help message\n".format(commandprefix)
-                returnmessage += "**{}pokemon [pokemon]** - provides stats of a Pokemon (alternatively {}dex)\n".format(commandprefix, commandprefix)
-                returnmessage += "**{}skill [skill]** - provides stats of a skill\n".format(commandprefix)
-                returnmessage += "**{}stage [stagetype]{}[pokemon/stageindex]{}<resultnumber>** - provides details of a stage, including disruptions\n".format(commandprefix, paramdelim, paramdelim)
-                returnmessage += "**{}event [pokemon]{}<resultnumber>** - provides info about an event, including dates\n".format(commandprefix, paramdelim)
-                returnmessage += "**{}query <filters>** - searches for Pokemon that match the given filters\n".format(commandprefix)
-                returnmessage += "**{}ebrewards [pokemon]** - lists the rewards of an eb\n".format(commandprefix)
-                returnmessage += "**{}eb [pokemon]** - lists the levels, HP, and moves/seconds of an eb\n".format(commandprefix)
-                returnmessage += "**{}week [weeknumber]** - provides quick info of all the events that start during a week\n".format(commandprefix)
-                returnmessage += "**{}addalias [original]{}[alias]** - adds an alias for a name\n".format(commandprefix, paramdelim)
-                returnmessage += "**{}listaliases [original/alias]** - lists all the aliases of a name\n".format(commandprefix)
-                returnmessage += "**{}oops** - deletes the message from {} from the user's last valid command".format(commandprefix, botname)
+                returnmessage = settings.message_helpmessage
             
             else:
                 querycommand = params[0]
                 if querycommand == "pokemon":
-                    returnmessage = "**Description**: Provides stats of a Pokemon (alternative command: dex)\n"
-                    returnmessage += "**Example**: {}pokemon bulbasaur".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_pokemon
                 elif querycommand == "skill":
-                    returnmessage = "**Description**: Provides stats of a skill\n"
-                    returnmessage += "**Example**: {}skill power of 4".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_skill
                 elif querycommand == "stage":
-                    returnmessage = "**Description**: Provides details of a stage, including disruptions. The two required parameters are stagetype and pokemon/index. Stagetype can be either main, expert, event, or eb. Querying by index will always have one result (unless it's out of range). Querying by Pokemon may have more than one result, in which case KoduckBot will provide the results' indices so the user can run the command again with the desired stage index. An optional third parameter resultnumber may be given to skip this step. The stagetype eb requires a third parameter level, instead of resultnumber. For this command, the first comma can be omitted.\n"
-                    returnmessage += "**Example**: {}stage main{}424\n".format(commandprefix, paramdelim)
-                    returnmessage += "**Example**: {}stage main{}chansey{}3\n".format(commandprefix, paramdelim, paramdelim)
-                    returnmessage += "**Example**: {}stage expert{}charizard\n".format(commandprefix, paramdelim)
-                    returnmessage += "**Example**: {}stage event{}wobbuffet (male)\n".format(commandprefix, paramdelim)
-                    returnmessage += "**Example**: {}stage eb{}latios{}95\n".format(commandprefix, paramdelim, paramdelim)
+                    returnmessage = settings.message_commandhelp_stage
                 elif querycommand == "event":
-                    returnmessage = "**Description**: Finds events with the given Pokemon and provides info, including dates. By default, the first result will be outputted, but an optional secondparameter resultnumber can be given.\n"
-                    returnmessage += "**Example**: event wobbuffet (male)\n".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_event
                 elif querycommand == "query":
-                    returnmessage = "**Description**: Searches for Pokemon that match the given filters. Any number of parameters can be given, but only valid ones will actually filter correctly. Filters must be in the form [stat]=[value], and the valid stats are: type, bp, rmls, maxap, skill, ss, skillss. If skillss is used, the Pokemon with the SS skill are boldified. To prevent walls of text, results with over 100 hits won't be printed.\n"
-                    returnmessage += "**Example**: {}query type=grass{}bp=40{}rml=20{}skill=power of 4{}ss=mega boost+\n".format(commandprefix, paramdelim, paramdelim, paramdelim, paramdelim)
-                    returnmessage += "**Example**: {}query maxap=105{}skillss=shot out\n".format(commandprefix, paramdelim)
+                    returnmessage = settings.message_commandhelp_query
                 elif querycommand == "ebrewards":
-                    returnmessage = "**Description**: Lists the rewards of an eb\n"
-                    returnmessage += "**Example**: {}ebrewards volcanion".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_ebrewards
                 elif querycommand == "eb":
-                    returnmessage = "**Description**: Lists the levels, HP, and moves/seconds of an eb\n"
-                    returnmessage += "**Example**: {}eb volcanion".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_eb
                 elif querycommand == "week":
-                    returnmessage = "**Description**: Provides quick info of all the events that start during a week, including drop items and rates and attempt costs\n"
-                    returnmessage += "**Example**: {}week 5".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_week
                 elif querycommand == "addalias":
-                    returnmessage = "**Description**: Adds an alias for a name to make it easier for {} to recognize names. The first parameter, name, can be an existing alias. At the moment, aliases can't be removed through commands, so be careful.\n".format(botname)
-                    returnmessage += "**Example**: {}addalias Primal Kyogre{}PKyo".format(commandprefix, paramdelim)
+                    returnmessage = settings.message_commandhelp_addalias
                 elif querycommand == "listaliases":
-                    returnmessage = "**Description**: Lists all the aliases of a name (which can also be an alias)\n"
-                    returnmessage += "**Example**: {}listaliases Primal Kyogre".format(commandprefix, paramdelim)
+                    returnmessage = settings.message_commandhelp_listaliases
                 elif querycommand == "oops":
-                    returnmessage = "**Description**: Deletes the message from {} from the user's last valid command\n".format(botname)
-                    returnmessage += "**Example**: {}oops".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_oops
                 elif querycommand == "emojify":
-                    returnmessage = "**Description**: Emojifies the message using Koduck's arsenal of Pokemon Shuffle icons. The emoji names should appear in brackets [] and can be aliases.\n"
-                    returnmessage += "**Example**: {}emojify [groudon] just dropped triple [psb]!".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_emojify
                 elif querycommand == "commandlock":
-                    returnmessage = "**Description**: Locks a command on this channel, preventing non-admins from using it. [Admin command]\n"
-                    returnmessage += "**Example**: {}commandlock stage".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_commandlock
                 elif querycommand == "restrict":
-                    returnmessage = "**Description**: Restricts a mentioned user, preventing them from using {} commands. [Admin command]\n".format(botname)
-                    returnmessage += "**Example**: {}restrict <@421005943287840788>".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_restrict
                 elif querycommand == "addresponse":
-                    returnmessage = "**Description**: Adds a response to a message. {} will respond with this response when this message is sent. [Admin command]\n".format(botname)
-                    returnmessage += "**Example**: {}addresponse \\o\\, /o/".format(commandprefix)
+                    returnmessage = settings.message_commandhelp_addresponse
                 elif querycommand == "addadmin":
-                    returnmessage = "xD"
+                    returnmessage = settings.message_commandhelp_addadmin
                 else:
-                    returnmessage = "I don't know this command"
+                    returnmessage = settings.message_commandhelp_unknowncommand
             
             return await sendmessage(message, sendcontent=returnmessage)
         
@@ -639,25 +620,29 @@ async def on_message(message):
                     original = aliases[params[0].lower()]
                 except KeyError:
                     original = params[0]
+                alias = params[1]
             except IndexError:
-                return await sendmessage(message, sendcontent="Needs two parameters: original, alias")
+                return await sendmessage(message, sendcontent=settings.message_addalias_noparam)
             
             #action
-            returnvalue = addalias(original, params[1])
+            returnvalue = addalias(original, alias)
             
             if returnvalue == 0:
-                return await sendmessage(message, sendcontent="Successfully added an alias")
+                return await sendmessage(message, sendcontent=settings.message_addalias_success)
             
             elif returnvalue == -1:
-                return await sendmessage(message, sendcontent="Alias already exists")
+                return await sendmessage(message, sendcontent=settings.message_addalias_failed)
         
         #LISTALIASES
         if command == "listaliases":
             #parse params
             try:
-                original = aliases[params[0]]
-            except KeyError:
-                original = params[0]
+                try:
+                    original = aliases[params[0]]
+                except KeyError:
+                    original = params[0]
+            except IndexError:
+                return await sendmessage(message, sendcontent=settings.message_listaliases_noparam)
             
             #action
             ans = []
@@ -665,23 +650,23 @@ async def on_message(message):
                 if aliases[alias].lower() == original.lower():
                     ans.append(alias.lower())
             if len(ans) > 0:
-                return await sendmessage(message, sendcontent="Aliases for {}: {}".format(original.lower(), ", ".join(ans)))
+                return await sendmessage(message, sendcontent=settings.message_listaliases_result.format(original.lower(), ", ".join(ans)))
             else:
-                return await sendmessage(message, sendcontent="There are no aliases for this name")
+                return await sendmessage(message, sendcontent=settings.message_listaliases_noresult)
         
         #OOPS
         if command == "oops":
             try:
                 THEmessage = userlastoutput[message.author.id]
                 await client.delete_message(THEmessage)
-                log(message, "Deleted last output from this user")
+                log(message, settings.message_oops_success)
             except (KeyError, discord.errors.NotFound):
-                log(message, "No last output from this user to delete")
+                log(message, settings.message_oops_failed)
             return
         
         #EMOJIFY
         if command == "emojify":
-            emojifiedmessage = message.content.replace("[", "").replace("]", "").replace("{}emojify ".format(commandprefix), "")
+            emojifiedmessage = message.content.replace("[", "").replace("]", "").replace("{}emojify".format(settings.commandprefix), "")
             #I have no idea how this works... but it works!
             possibleemojis = re.findall(r"[^[]*\[([^]]*)\]", message.content)
             
@@ -695,10 +680,13 @@ async def on_message(message):
                 except KeyError:
                     okay = "okay"
             
-            return await sendmessage(message, sendcontent="{} says: ".format(message.author.name) + emojifiedmessage)
+            return await sendmessage(message, sendcontent=settings.message_emojify_result.format(message.author.name) + emojifiedmessage)
         
         #POKEMON
         if command == "pokemon" or command == "dex":
+            if len(params) < 1:
+                return await sendmessage(message, sendcontent=settings.message_pokemon_noparam)
+            
             #parse params
             try:
                 querypokemon = aliases[params[0].lower()]
@@ -709,13 +697,16 @@ async def on_message(message):
             try:
                 queryindex = pokemondict[querypokemon]
             except KeyError:
-                return await sendmessage(message, sendcontent="Could not find a Pokemon entry with that name")
+                return await sendmessage(message, sendcontent=settings.message_pokemon_noresult)
             pokemon = PokemonData.getPokemonInfo(queryindex)
             
             return await sendmessage(message, sendembed=formatpokemonembed(pokemon))
         
         #SKILL
         if command == "skill":
+            if len(params) < 1:
+                return await sendmessage(message, sendcontent=settings.message_skill_noparam)
+            
             #parse params
             try:
                 queryskill = aliases[params[0].lower()]
@@ -726,7 +717,7 @@ async def on_message(message):
             try:
                 queryindex = skilldict[queryskill]
             except KeyError:
-                return await sendmessage(message, sendcontent="Could not find a Skill entry with that name")
+                return await sendmessage(message, sendcontent=settings.message_skill_noresult)
             skill = PokemonAbility.getAbilityInfo(queryindex)
             
             return await sendmessage(message, sendembed=formatskillembed(skill))
@@ -744,7 +735,7 @@ async def on_message(message):
                     try:
                         resultnumber = int(params[1])
                     except ValueError:
-                        return await sendmessage(message, sendcontent="Result number should be an integer")
+                        return await sendmessage(message, sendcontent=settings.message_stage_invalidparam2)
                 else:
                     stagetype = params[0]
                     querypokemon = params[1].lower()
@@ -756,7 +747,7 @@ async def on_message(message):
                     try:
                         resultnumber = int(params[2])
                     except ValueError:
-                        return await sendmessage(message, sendcontent="Result number should be an integer")
+                        return await sendmessage(message, sendcontent=settings.message_stage_invalidparam2)
             elif len(params) == 1 and params[0].find(" ") != -1:
                 stagetype = params[0][0:params[0].find(" ")]
                 querypokemon = params[0][params[0].find(" ")+1:].lower()
@@ -765,7 +756,7 @@ async def on_message(message):
                 except KeyError:
                     okay = "okay"
             else:
-                return await sendmessage(message, sendcontent="Needs two parameters: stagetype, index/pokemon, <resultnumber>")
+                return await sendmessage(message, sendcontent=settings.message_stage_noparam)
             
             results = []
             resultsmobile = []
@@ -774,11 +765,13 @@ async def on_message(message):
             if stagetype == "main":
                 #query by index
                 if querypokemon.isdigit():
+                    if int(querypokemon) == 0:
+                        return await sendmessage(message, sendcontent=settings.message_stage_main_invalidparam)
                     try:
                         results.append(sdataMain.getStageInfo(int(querypokemon)))
                         resultsmobile.append(sdataMainMobile.getStageInfo(int(querypokemon), extra="m"))
                     except IndexError:
-                        return await sendmessage(message, sendcontent="Main Stages range from 1 to 700")
+                        return await sendmessage(message, sendcontent=settings.message_stage_main_invalidparam)
                 
                 #query by pokemon
                 else:
@@ -797,7 +790,7 @@ async def on_message(message):
                         results.append(sdataExpert.getStageInfo(int(querypokemon)))
                         resultsmobile.append(sdataExpertMobile.getStageInfo(int(querypokemon), extra="m"))
                     except IndexError:
-                        return await sendmessage(message, sendcontent="Expert Stages range from 0 to 52")
+                        return await sendmessage(message, sendcontent=settings.message_stage_expert_invalidparam)
                 
                 #query by pokemon
                 else:
@@ -816,7 +809,7 @@ async def on_message(message):
                         results.append(sdataEvent.getStageInfo(int(querypokemon)))
                         resultsmobile.append(sdataEventMobile.getStageInfo(int(querypokemon), extra="m"))
                     except:
-                        return await sendmessage(message, sendcontent="Event Stages range from 0 to 715")
+                        return await sendmessage(message, sendcontent=settings.message_stage_event_invalidparam)
                 
                 #query by pokemon
                 else:
@@ -830,12 +823,14 @@ async def on_message(message):
             #EB STAGES
             elif stagetype == "eb":
                 if querypokemon not in ebpokemon:
-                    return await sendmessage(message, sendcontent="Could not find an Escalation Battles with that Pokemon")
+                    return await sendmessage(message, sendcontent=settings.message_stage_eb_noresult)
                 
                 if resultnumber == 0:
-                    return await sendmessage(message, sendcontent="Stage Type 'eb' needs a third parameter: level")
+                    return await sendmessage(message, sendcontent=settings.message_stage_eb_noparam)
                 else:
                     querylevel = str(resultnumber)
+                if int(querylevel) < 0:
+                    return await sendmessage(message, sendcontent=settings.message_stage_eb_invalidparam)
                 
                 ebstages = ebstagesdict[querypokemon]
                 stageindex = -1
@@ -865,10 +860,10 @@ async def on_message(message):
                     return await sendmessage(message, sendembed=formatstageembed(results[0], "event", extra=extra, mobile=resultsmobile[0]))
                 
                 else:
-                    return await sendmessage(message, sendcontent="Something broke")
+                    return await sendmessage(message, sendcontent=settings.message_somethingbroke)
             
             else:
-                return await sendmessage(message, sendcontent="Stage Type should be one of these: main, expert, event, eb")
+                return await sendmessage(message, sendcontent=settings.message_stage_invalidparam)
             
             #if a result number is given
             if resultnumber != 0:
@@ -876,9 +871,9 @@ async def on_message(message):
                     return await sendmessage(message, sendembed=formatstageembed(results[resultnumber-1], stagetype, mobile=resultsmobile[resultnumber-1]))
                 except IndexError:
                     if len(results) != 0:
-                        return await sendmessage(message, sendcontent="Result number wasn't in the range of results ({})".format(len(results)))
+                        return await sendmessage(message, sendcontent=settings.message_stage_resulterror.format(len(results)))
                     else:
-                        return await sendmessage(message, sendcontent="Could not find a stage with that Pokemon")
+                        return await sendmessage(message, sendcontent=settings.message_stage_noresult)
             
             elif len(results) == 1:
                 return await sendmessage(message, sendembed=formatstageembed(results[0], stagetype, mobile=resultsmobile[0]))
@@ -889,13 +884,15 @@ async def on_message(message):
                     indices += "{}, ".format(stage.index)
                 indices = indices[:-2]
                 
-                return await sendmessage(message, sendcontent="More than one result: {}".format(indices))
+                return await sendmessage(message, sendcontent=settings.message_stage_multipleresults.format(indices))
             else:
-                return await sendmessage(message, sendcontent="Could not find a stage with that Pokemon")
+                return await sendmessage(message, sendcontent=settings.message_stage_noresult)
         
         #EVENT
         if command == "event":
             resultnumber = 0
+            if len(params) < 1:
+                return await sendmessage(message, sendcontent=settings.message_event_noparam)
             
             #parse params
             try:
@@ -906,21 +903,21 @@ async def on_message(message):
                 try:
                     resultnumber = int(params[1])
                 except ValueError:
-                    return await sendmessage(message, sendcontent="Result number should be an integer")
+                    return await sendmessage(message, sendcontent=settings.message_event_invalidparam)
             
             #retrieve data
             try:
                 results = eventsdict[querypokemon]
             except KeyError:
-                return await sendmessage(message, sendcontent="Could not find an event with that Pokemon")
+                return await sendmessage(message, sendcontent=settings.message_event_noresult)
             
             try:
                 return await sendmessage(message, sendcontent=results[resultnumber-1].getFormattedData())
             except IndexError:
                 if len(results) != 0:
-                    return await sendmessage(message, sendcontent="Result number wasn't in the range of results ({})".format(len(results)))
+                    return await sendmessage(message, sendcontent=settings.message_event_resulterror.format(len(results)))
                 else:
-                    return await sendmessage(message, sendcontent="Could not find an event with that Pokemon")
+                    return await sendmessage(message, sendcontent=settings.message_event_noresult)
         
         #QUERY
         if command == "query":
@@ -929,6 +926,9 @@ async def on_message(message):
             
             #parse params, put values into query values
             for subquery in params:
+                if len(subquery.split("=")) <= 1:
+                    continue
+                
                 left = subquery.split("=")[0]
                 try:
                     right = aliases[subquery.split("=")[1]]
@@ -971,12 +971,12 @@ async def on_message(message):
             
             #sort results and create a string to send
             hits.sort()
-            if len(hits) > 100:
-                outputstring = "Too many hits!"
+            if len(hits) > settings.queryresultlimit:
+                outputstring = settings.message_query_toomanyresults
             elif len(hits) == 0:
-                outputstring = "No hits"
+                outputstring = settings.message_query_noresult
             else:
-                outputstring = ""
+                outputstring = settings.message_query_result.format(len(hits)) + " "
                 for item in hits:
                     outputstring += "{}, ".format("**" + item if item.find("**") != -1 else item)
                 outputstring = outputstring[:-2]
@@ -985,6 +985,9 @@ async def on_message(message):
         
         #EBREWARDS
         if command == "ebrewards":
+            if len(params) < 1:
+                return await sendmessage(message, sendcontent=settings.message_ebrewards_noparam)
+            
             #parse params
             try:
                 querypokemon = aliases[params[0].lower()]
@@ -995,12 +998,15 @@ async def on_message(message):
             try:
                 ebrewards = ebrewardsdict[querypokemon]
             except KeyError:
-                return await sendmessage(message, sendcontent="No Escalation Battles found with that Pokemon name")
+                return await sendmessage(message, sendcontent=settings.message_ebrewards_noresult)
             
             return await sendmessage(message, sendembed=formatebrewardsembed(ebrewards, querypokemon))
         
         #EB
         if command == "eb":
+            if len(params) < 1:
+                return await sendmessage(message, sendcontent=settings.message_eb_noparam)
+            
             #parse params
             try:
                 querypokemon = aliases[params[0].lower()]
@@ -1011,20 +1017,28 @@ async def on_message(message):
                 return await sendmessage(message, sendembed=formatebdetailsembed(querypokemon))
                 
             except KeyError:
-                return await sendmessage(message, sendcontent="No Escalation Battles found with that Pokemon name")
+                return await sendmessage(message, sendcontent=settings.message_eb_noresult)
         
         #WEEK
         if command == "week":
-            queryweek = params[0]
+            try:
+                try:
+                    queryweek = int(params[0])
+                except ValueError:
+                    return await sendmessage(message, sendcontent=settings.message_week_invalidparam)
+                if queryweek <= 0 or queryweek >= settings.numweeks + 1:
+                    return await sendmessage(message, sendcontent=settings.message_week_invalidparam)
+            except IndexError:
+                queryweek = currentweek
             
             return await sendmessage(message, sendembed=formatweekembed(queryweek))
         
         #unknown command
-        log(message, "Command not recognized")
+        log(message, settings.message_unknowncommand)
     
     except Exception as e:
         traceback.print_exc()
-        log(message, "Unhandled error")
+        log(message, settings.message_unhandlederror)
 
 ################
 #MISC FUNCTIONS#
@@ -1375,7 +1389,7 @@ def formatweekembed(queryweek):
         
         if event.repeattype != 1:
             continue
-        if event.repeatparam1+1 != int(queryweek):
+        if event.repeatparam1+1 != queryweek:
             continue
         
         dropsstring = ""
