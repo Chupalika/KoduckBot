@@ -33,7 +33,7 @@ ebrewardsBin = BinStorage(settings.ebrewardsfile)
 
 #MISC FUNCTIONS
 def strippunctuation(string):
-    return string.replace(" ", "").replace("(", "").replace(")", "").replace("-", "").replace("'", "").replace("é", "e").replace(".", "").replace("%", "").replace("+", "")
+    return string.replace(" ", "").replace("(", "").replace(")", "").replace("-", "").replace("'", "").replace("é", "e").replace(".", "").replace("%", "").replace("+", "").replace(":", "")
 
 def removeduplicates(list):
     ans = []
@@ -60,6 +60,11 @@ async def sendmessage(receivemessage, sendcontent="", sendembed=None):
     userlastoutput[receivemessage.author.id] = THEmessage
     global lastmessageDT
     lastmessageDT = datetime.datetime.now()
+    
+    try:
+        botoutputs[receivemessage.channel].append(THEmessage)
+    except KeyError:
+        botoutputs[receivemessage.channel] = [THEmessage]
     
     log(receivemessage, sendcontent)
     return True
@@ -378,6 +383,7 @@ shorthanditems = {"Raise Max Level":"RML", "Level Up":"LU", "Exp. Booster S":"EB
 typecolor = {"Normal":0xa8a878, "Fire":0xf08030, "Water":0x6890f0, "Grass":0x78c850, "Electric":0xf8d030, "Ice":0x98d8d8, "Fighting":0xc03028, "Poison":0xa040a0, "Ground":0xe0c068, "Flying":0xa890f0, "Psychic":0xf85888, "Bug":0xa8b820, "Rock":0xb8a038, "Ghost":0x705898, "Dragon":0x7038f8, "Dark":0x705848, "Steel":0xb8b8d0, "Fairy":0xee99ac}
 emojis = {}
 userlastoutput = {}
+botoutputs = {}
 global lastmessageDT
 lastmessageDT = datetime.datetime.now()
 global currentweek
@@ -385,6 +391,9 @@ currentweek = settings.currentweek
 
 @client.event
 async def on_ready():
+    if client.user.id != settings.botname:
+        await client.edit_profile(username=settings.botname)
+    
     print("Bot online!")
     print("Name: {}".format(client.user.name))
     print("ID: {}".format(client.user.id))
@@ -398,6 +407,12 @@ async def on_ready():
                 emojis[emoji.name.lower()] = "<:{}:{}>".format(emoji.name, emoji.id)  
     
     print("Shuffle Servers: {}".format(", ".join([x.name for x in shuffleservers])))
+    
+    if settings.pinnedhelpmessageid != "":
+        THEchannel = client.get_channel(settings.pinnedhelpmessagechid)
+        THEmessage = await client.get_message(THEchannel, settings.pinnedhelpmessageid)
+        if THEmessage.content != settings.message_helpmessage:
+            await client.edit_message(THEmessage, new_content=settings.message_helpmessage)
 
 ##############
 #INPUT OUTPUT#
@@ -438,6 +453,7 @@ async def on_message(message):
                 command = message.content[len(settings.commandprefix):]
         else:
             return
+        command = command.lower()
         
         #ignore message if bot is on cooldown
         if cooldownactive:
@@ -477,6 +493,15 @@ async def on_message(message):
             return
         
         #MASTER ADMIN COMMANDS
+        if command == "sendmessage":
+            channelid = params[0]
+            THEchannel = client.get_channel(channelid)
+            THEmessage = settings.paramdelim.join(params[1:]).replace(channelid, "")
+            return await client.send_message(THEchannel, THEmessage)
+        
+        if command == "changeusername":
+            return await client.edit_profile(username=params[0])
+        
         if command == "updatealiases":
             updatealiases()
             return
@@ -499,6 +524,7 @@ async def on_message(message):
         
         if command == "currentweek":
             currentweek = int(params[0])
+            return
         
         if command == "addadmin":
             #need exactly one mentioned user (the order in the mentioned list is unreliable)
@@ -567,6 +593,30 @@ async def on_message(message):
             elif returnvalue == -1:
                 return await sendmessage(message, sendcontent=settings.message_addresponse_failed)
         
+        if command == "purge":
+            #parse params
+            try:
+                definedpurgelimit = params[0]
+            except IndexError:
+                return await sendmessage(message, sendcontent=settings.message_purge_noparam)
+            try:
+                definedpurgelimit = int(params[0])
+            except IndexError:
+                return await sendmessage(message, sendcontent=settings.message_purge_invalidparam)
+            #grab data
+            try:
+                messages = botoutputs[message.channel]
+            except KeyError:
+                return await sendmessage(message, sendcontent=settings.message_purge.format("0"))
+            
+            #action
+            count = 0
+            while len(messages) != 0 and count < settings.purgelimit and count < definedpurgelimit:
+                THEmessage = messages.pop()
+                await client.delete_message(THEmessage)
+                count += 1
+            return await sendmessage(message, sendcontent=settings.message_purge_success.format(count))
+        
         #REGULAR COMMANDS
         #HELP
         if command == "help":
@@ -605,6 +655,8 @@ async def on_message(message):
                     returnmessage = settings.message_commandhelp_restrict
                 elif querycommand == "addresponse":
                     returnmessage = settings.message_commandhelp_addresponse
+                elif querycommand == "purge":
+                    returnmessage = settings.message_commandhelp_purge
                 elif querycommand == "addadmin":
                     returnmessage = settings.message_commandhelp_addadmin
                 else:
@@ -666,21 +718,22 @@ async def on_message(message):
         
         #EMOJIFY
         if command == "emojify":
-            emojifiedmessage = message.content.replace("[", "").replace("]", "").replace("{}emojify".format(settings.commandprefix), "")
+            emojifiedmessage = message.content.replace("{}emojify ".format(settings.commandprefix), "")
             #I have no idea how this works... but it works!
             possibleemojis = re.findall(r"[^[]*\[([^]]*)\]", message.content)
+            possibleemojis = removeduplicates(possibleemojis)
             
             for i in range(len(possibleemojis)):
                 try:
                     emojiname = strippunctuation(aliases[possibleemojis[i].lower()])
                 except:
-                    emojiname = possibleemojis[i]
+                    emojiname = strippunctuation(possibleemojis[i].lower())
                 try:
-                    emojifiedmessage = emojifiedmessage.replace(possibleemojis[i], emojis[emojiname])
+                    emojifiedmessage = emojifiedmessage.replace("[{}]".format(possibleemojis[i]), emojis[emojiname])
                 except KeyError:
-                    okay = "okay"
+                    emojifiedmessage = emojifiedmessage.replace("[{}]".format(possibleemojis[i]), possibleemojis[i])
             
-            return await sendmessage(message, sendcontent=settings.message_emojify_result.format(message.author.name) + emojifiedmessage)
+            return await sendmessage(message, sendcontent=emojifiedmessage)
         
         #POKEMON
         if command == "pokemon" or command == "dex":
@@ -723,170 +776,111 @@ async def on_message(message):
             return await sendmessage(message, sendembed=formatskillembed(skill))
         
         #STAGE
-        if command == "stage":
+        if command == "stage" or command == "stagex":
+            if command == "stagex":
+                shorthand = True
+            else:
+                shorthand = False
             resultnumber = 0
             
-            #parse params
-            #param parsing is a bit different here, attempting to allow stagetype to be grouped with query, as long as it's separated by a space
-            if len(params) >= 2:
-                if params[0].find(" ") != -1:
-                    stagetype = params[0][0:params[0].find(" ")]
-                    querypokemon = params[0][params[0].find(" ")+1:].lower()
-                    try:
-                        resultnumber = int(params[1])
-                    except ValueError:
-                        return await sendmessage(message, sendcontent=settings.message_stage_invalidparam2)
-                else:
-                    stagetype = params[0]
-                    querypokemon = params[1].lower()
-                try:
-                    querypokemon = aliases[querypokemon]
-                except KeyError:
-                    okay = "okay"
-                if len(params) >= 3:
-                    try:
-                        resultnumber = int(params[2])
-                    except ValueError:
-                        return await sendmessage(message, sendcontent=settings.message_stage_invalidparam2)
-            elif len(params) == 1 and params[0].find(" ") != -1:
-                stagetype = params[0][0:params[0].find(" ")]
-                querypokemon = params[0][params[0].find(" ")+1:].lower()
-                try:
-                    querypokemon = aliases[querypokemon]
-                except KeyError:
-                    okay = "okay"
+            querypokemon = params[0].lower()
+            if querypokemon.isdigit():
+                stagetype = "main"
+                stageindex = int(querypokemon)
+            elif querypokemon.startswith("ex") and querypokemon[2:].isdigit():
+                stagetype = "expert"
+                stageindex = int(querypokemon[2:]) - 1
+            elif querypokemon.startswith("s") and querypokemon[1:].isdigit():
+                stagetype = "event"
+                stageindex = int(querypokemon[1:])
             else:
-                return await sendmessage(message, sendcontent=settings.message_stage_noparam)
+                try:
+                    querypokemon = aliases[querypokemon]
+                except KeyError:
+                    okay = "okay"
+                stagetype = "all"
             
             results = []
             resultsmobile = []
             
             #MAIN STAGES
             if stagetype == "main":
-                #query by index
-                if querypokemon.isdigit():
-                    if int(querypokemon) == 0:
-                        return await sendmessage(message, sendcontent=settings.message_stage_main_invalidparam)
-                    try:
-                        results.append(sdataMain.getStageInfo(int(querypokemon)))
-                        resultsmobile.append(sdataMainMobile.getStageInfo(int(querypokemon), extra="m"))
-                    except IndexError:
-                        return await sendmessage(message, sendcontent=settings.message_stage_main_invalidparam)
-                
-                #query by pokemon
-                else:
-                    try:
-                        for index in mainstagedict[querypokemon]:
-                            results.append(sdataMain.getStageInfo(index))
-                            resultsmobile.append(sdataMainMobile.getStageInfo(index, extra="m"))
-                    except KeyError:
-                        okay = "okay"
+                if stageindex == 0:
+                    return await sendmessage(message, sendcontent=settings.message_stage_main_invalidparam)
+                try:
+                    results.append(("main", sdataMain.getStageInfo(stageindex)))
+                    resultsmobile.append(("main", sdataMainMobile.getStageInfo(stageindex, extra="m")))
+                except IndexError:
+                    return await sendmessage(message, sendcontent=settings.message_stage_main_invalidparam)
             
             #EXPERT STAGES
             elif stagetype == "expert":
-                #query by index
-                if querypokemon.isdigit():
-                    try:
-                        results.append(sdataExpert.getStageInfo(int(querypokemon)))
-                        resultsmobile.append(sdataExpertMobile.getStageInfo(int(querypokemon), extra="m"))
-                    except IndexError:
-                        return await sendmessage(message, sendcontent=settings.message_stage_expert_invalidparam)
-                
-                #query by pokemon
-                else:
-                    try:
-                        for index in expertstagedict[querypokemon]:
-                            results.append(sdataExpert.getStageInfo(index))
-                            resultsmobile.append(sdataExpertMobile.getStageInfo(index, extra="m"))
-                    except KeyError:
-                        okay = "okay"
+                try:
+                    results.append(("expert", sdataExpert.getStageInfo(stageindex)))
+                    resultsmobile.append(("expert", sdataExpertMobile.getStageInfo(stageindex, extra="m")))
+                except IndexError:
+                    return await sendmessage(message, sendcontent=settings.message_stage_expert_invalidparam)
             
             #EVENT STAGES
             elif stagetype == "event":
-                #query by index
-                if querypokemon.isdigit():
-                    try:
-                        results.append(sdataEvent.getStageInfo(int(querypokemon)))
-                        resultsmobile.append(sdataEventMobile.getStageInfo(int(querypokemon), extra="m"))
-                    except:
-                        return await sendmessage(message, sendcontent=settings.message_stage_event_invalidparam)
-                
-                #query by pokemon
-                else:
-                    try:
-                        for index in eventstagedict[querypokemon]:
-                            results.append(sdataEvent.getStageInfo(index))
-                            resultsmobile.append(sdataEventMobile.getStageInfo(index, extra="m"))
-                    except KeyError:
-                        okay = "okay"
+                try:
+                    results.append(("event", sdataEvent.getStageInfo(stageindex)))
+                    resultsmobile.append(("event", sdataEventMobile.getStageInfo(stageindex, extra="m")))
+                except:
+                    return await sendmessage(message, sendcontent=settings.message_stage_event_invalidparam)
             
-            #EB STAGES
-            elif stagetype == "eb":
-                if querypokemon not in ebpokemon:
-                    return await sendmessage(message, sendcontent=settings.message_stage_eb_noresult)
+            #ALL STAGES
+            elif stagetype == "all":
+                try:
+                    for index in mainstagedict[querypokemon]:
+                        results.append(("main", sdataMain.getStageInfo(index)))
+                        resultsmobile.append(("main", sdataMainMobile.getStageInfo(index, extra="m")))
+                except KeyError:
+                    okay = "okay"
                 
-                if resultnumber == 0:
-                    return await sendmessage(message, sendcontent=settings.message_stage_eb_noparam)
-                else:
-                    querylevel = str(resultnumber)
-                if int(querylevel) < 0:
-                    return await sendmessage(message, sendcontent=settings.message_stage_eb_invalidparam)
+                try:
+                    for index in expertstagedict[querypokemon]:
+                        results.append(("expert", sdataExpert.getStageInfo(index)))
+                        resultsmobile.append(("expert", sdataExpertMobile.getStageInfo(index, extra="m")))
+                except KeyError:
+                    okay = "okay"
                 
-                ebstages = ebstagesdict[querypokemon]
-                stageindex = -1
-                
-                #attempt to find the correct stage given the queried level
-                startlevel = querylevel
-                while int(startlevel) > 0:
-                    try:
-                        stageindex = ebstages[startlevel][0]
-                        endlevel = str(int(ebstages[startlevel][1]) - 1)
-                        break
-                    except KeyError:
-                        startlevel = str(int(startlevel) - 1)
-                
-                if stageindex != -1:
-                    results.append(sdataEvent.getStageInfo(int(stageindex)))
-                    resultsmobile.append(sdataEventMobile.getStageInfo(int(stageindex), extra="m"))
-                    
-                    #extra string to show level range of this eb stage
-                    if startlevel == endlevel:
-                        extra = " (Level {})".format(startlevel)
-                    elif int(endlevel) >= 501:
-                        extra = " (Levels {}+)".format(startlevel)
-                    else:
-                        extra = " (Levels {} to {})".format(startlevel, endlevel)
-                    
-                    return await sendmessage(message, sendembed=formatstageembed(results[0], "event", extra=extra, mobile=resultsmobile[0]))
-                
-                else:
-                    return await sendmessage(message, sendcontent=settings.message_somethingbroke)
-            
-            else:
-                return await sendmessage(message, sendcontent=settings.message_stage_invalidparam)
+                try:
+                    for index in eventstagedict[querypokemon]:
+                        results.append(("event", sdataEvent.getStageInfo(index)))
+                        resultsmobile.append(("event", sdataEventMobile.getStageInfo(index, extra="m")))
+                except KeyError:
+                    okay = "okay"
             
             #if a result number is given
             if resultnumber != 0:
                 try:
-                    return await sendmessage(message, sendembed=formatstageembed(results[resultnumber-1], stagetype, mobile=resultsmobile[resultnumber-1]))
+                    return await sendmessage(message, sendembed=formatstageembed(results[resultnumber-1], stagetype, mobile=resultsmobile[resultnumber-1], shorthand=shorthand))
                 except IndexError:
                     if len(results) != 0:
                         return await sendmessage(message, sendcontent=settings.message_stage_resulterror.format(len(results)))
                     else:
-                        return await sendmessage(message, sendcontent=settings.message_stage_noresult)
+                        return await sendmessage(message, sendcontent=settings.message_stage_noresult.format(params[0]))
             
             elif len(results) == 1:
-                return await sendmessage(message, sendembed=formatstageembed(results[0], stagetype, mobile=resultsmobile[0]))
+                return await sendmessage(message, sendembed=formatstageembed(results[0][1], results[0][0], mobile=resultsmobile[0][1], shorthand=shorthand))
             
             elif len(results) > 1:
                 indices = ""
-                for stage in results:
-                    indices += "{}, ".format(stage.index)
+                for pair in results:
+                    stagetype2 = pair[0]
+                    stage = pair[1]
+                    if stagetype2 == "main":
+                        indices += "{}, ".format(stage.index)
+                    elif stagetype2 == "expert":
+                        indices += "ex{}, ".format(int(stage.index) + 1)
+                    elif stagetype2 == "event":
+                        indices += "s{}, ".format(stage.index)
                 indices = indices[:-2]
                 
                 return await sendmessage(message, sendcontent=settings.message_stage_multipleresults.format(indices))
             else:
-                return await sendmessage(message, sendcontent=settings.message_stage_noresult)
+                return await sendmessage(message, sendcontent=settings.message_stage_noresult.format(params[0]))
         
         #EVENT
         if command == "event":
@@ -909,7 +903,7 @@ async def on_message(message):
             try:
                 results = eventsdict[querypokemon]
             except KeyError:
-                return await sendmessage(message, sendcontent=settings.message_event_noresult)
+                return await sendmessage(message, sendcontent=settings.message_event_noresult.format(params[0]))
             
             try:
                 return await sendmessage(message, sendcontent=results[resultnumber-1].getFormattedData())
@@ -917,7 +911,7 @@ async def on_message(message):
                 if len(results) != 0:
                     return await sendmessage(message, sendcontent=settings.message_event_resulterror.format(len(results)))
                 else:
-                    return await sendmessage(message, sendcontent=settings.message_event_noresult)
+                    return await sendmessage(message, sendcontent=settings.message_event_noresult.format(params[0]))
         
         #QUERY
         if command == "query":
@@ -998,7 +992,7 @@ async def on_message(message):
             try:
                 ebrewards = ebrewardsdict[querypokemon]
             except KeyError:
-                return await sendmessage(message, sendcontent=settings.message_ebrewards_noresult)
+                return await sendmessage(message, sendcontent=settings.message_ebrewards_noresult.format(params[0]))
             
             return await sendmessage(message, sendembed=formatebrewardsembed(ebrewards, querypokemon))
         
@@ -1013,11 +1007,47 @@ async def on_message(message):
             except KeyError:
                 querypokemon = params[0].lower()
             
-            try:
-                return await sendmessage(message, sendembed=formatebdetailsembed(querypokemon))
+            if querypokemon not in ebpokemon:
+                return await sendmessage(message, sendcontent=settings.message_eb_noresult.format(params[0]))
+            
+            #optional level param
+            if len(params) >= 2:
+                querylevel = params[1]
+                try:
+                    if int(querylevel) < 0:
+                        return await sendmessage(message, sendcontent=settings.message_stage_eb_invalidparam)
+                except ValueError:
+                    return await sendmessage(message, sendcontent=settings.message_stage_eb_invalidparam)
                 
-            except KeyError:
-                return await sendmessage(message, sendcontent=settings.message_eb_noresult)
+                ebstages = ebstagesdict[querypokemon]
+                stageindex = -1
+                
+                #attempt to find the correct stage given the queried level
+                startlevel = querylevel
+                while int(startlevel) > 0:
+                    try:
+                        stageindex = ebstages[startlevel][0]
+                        endlevel = str(int(ebstages[startlevel][1]) - 1)
+                        break
+                    except KeyError:
+                        startlevel = str(int(startlevel) - 1)
+                
+                if stageindex != -1:
+                    result = sdataEvent.getStageInfo(int(stageindex))
+                    resultmobile = sdataEventMobile.getStageInfo(int(stageindex), extra="m")
+                    
+                    #extra string to show level range of this eb stage
+                    if startlevel == endlevel:
+                        extra = " (Level {})".format(startlevel)
+                    elif int(endlevel) < 0:
+                        extra = " (Levels {}+)".format(startlevel)
+                    else:
+                        extra = " (Levels {} to {})".format(startlevel, endlevel)
+                    
+                    return await sendmessage(message, sendembed=formatstageembed(result, "event", extra=extra, mobile=resultmobile))
+            
+            else:
+                return await sendmessage(message, sendembed=formatebdetailsembed(querypokemon))
         
         #WEEK
         if command == "week":
@@ -1117,7 +1147,7 @@ def formatskillembed(skill):
     embed = discord.Embed(title=skill.name, color=THEcolor, description=stats)
     return embed
 
-def formatstageembed(stage, stagetype, extra="", mobile=None):
+def formatstageembed(stage, stagetype, extra="", mobile=None, shorthand=False):
     stats = "**HP**: {}{}{}".format(stage.hp, " (UX: {})".format(stage.hp * 3) if stagetype == "main" and stage.ispuzzlestage == 0 else "", " + {}".format(stage.extrahp) if stage.extrahp != 0 else "")
     if mobile is not None and mobile.hp != stage.hp:
         stats += " (Mobile: {}{})".format(mobile.hp, " (UX: {})".format(mobile.hp * 3) if stagetype == "main" and mobile.ispuzzlestage == 0 else "")
@@ -1218,8 +1248,10 @@ def formatstageembed(stage, stagetype, extra="", mobile=None):
                 rulesstring += "???"
             
             #Combo condition or a timer
-            if countdown["cdcombocondition"] != 0:
-                rulesstring += "if Combo {} {}:".format(["wtf", "<=", "=", "<=", ">="][countdown["cdcombocondition"]], countdown["cdcombothreshold"])
+            if countdown["cdcombocondition"] == 1:
+                rulesstring += "if player makes a mo{}:".format(countdown["cdcombothreshold"])
+            elif countdown["cdcombocondition"] != 0:
+                rulesstring += "if Combo {} {}:".format(["wtf", "AAAAAAAA", "=", "<=", ">="][countdown["cdcombocondition"]], countdown["cdcombothreshold"])
             else:
                 if stage.timed:
                     rulesstring += "every {} move{}:".format(countdown["cdtimer2"], "s" if countdown["cdtimer2"] >= 2 else "")
@@ -1325,12 +1357,13 @@ def formatstageembed(stage, stagetype, extra="", mobile=None):
                 cddisruptions[cdnum] += "\n- ???"
     
     embed = discord.Embed(title="{} Stage Index {}: {}{}{}".format(stagetype.capitalize(), stage.index, stage.pokemon.fullname, " " + emojis[strippunctuation(stage.pokemon.fullname).lower()], extra), color=typecolor[stage.pokemon.type], description=stats)
-    if stage.layoutindex != 0:
-        embed.set_thumbnail(url="https://raw.githubusercontent.com/Chupalika/Kaleo/icons/{} Stages Layouts/Layout Index {}.png".format(stagetype.capitalize(), stage.layoutindex).replace(" ", "%20"))
-        embed.url = "https://raw.githubusercontent.com/Chupalika/Kaleo/icons/{} Stages Layouts/Layout Index {}.png".format(stagetype.capitalize(), stage.layoutindex).replace(" ", "%20")
-    for i in range(len(cddisruptions)):
-        if cddisruptions[i] != "":
-            embed.add_field(name="**Countdown {}**".format(i+1), value=cddisruptions[i], inline=False)
+    if not shorthand:
+        if stage.layoutindex != 0:
+            embed.set_thumbnail(url="https://raw.githubusercontent.com/Chupalika/Kaleo/icons/{} Stages Layouts/Layout Index {}.png".format(stagetype.capitalize(), stage.layoutindex).replace(" ", "%20"))
+            embed.url = "https://raw.githubusercontent.com/Chupalika/Kaleo/icons/{} Stages Layouts/Layout Index {}.png".format(stagetype.capitalize(), stage.layoutindex).replace(" ", "%20")
+        for i in range(len(cddisruptions)):
+            if cddisruptions[i] != "":
+                embed.add_field(name="**Countdown {}**".format(i+1), value=cddisruptions[i], inline=False)
     return embed
 
 def formatebrewardsembed(ebrewards, querypokemon):
