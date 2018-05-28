@@ -1,6 +1,7 @@
 # -*- coding: utf_8 -*-
 
 import discord
+import asyncio
 from discord.ext.commands import Bot
 from discord.ext import commands
 import sys, os, traceback, re
@@ -45,10 +46,12 @@ def removeduplicates(list):
 def log(message, logresult):
     logmessage = message.content
     #don't want too much content in logs...
-    if len(logmessage) > settings.logresultcharlimit:
+    if len(logmessage) > settings.logmessagecharlimit:
         logmessage = settings.message_messagetoolong
-    if len(logresult) > settings.logmessagecharlimit:
+    if len(logresult) > settings.logresultcharlimit:
         logresult = ""
+    
+    logresult = logresult.replace("\n", " ")
     
     file = open("../" + settings.logfile, "a", encoding="utf8")
     file.write("\n#{} {} {}: {} [{}]".format(message.channel.name, message.timestamp.strftime("%Y-%m-%d %H:%M:%S"), message.author.name, logmessage, logresult))
@@ -56,6 +59,8 @@ def log(message, logresult):
     return
 
 async def sendmessage(receivemessage, sendcontent="", sendembed=None):
+    if len(sendcontent) > 2000:
+        sendcontent = settings.message_resulttoolong.format(len(sendcontent))
     THEmessage = await client.send_message(receivemessage.channel, sendcontent, embed=sendembed)
     userlastoutput[receivemessage.author.id] = THEmessage
     global lastmessageDT
@@ -189,15 +194,6 @@ for eb in ebpokemon:
 #ALIASES
 def updatealiases():
     aliases.clear()
-    file = open("../" + settings.aliasesfile, encoding="utf8")
-    filecontents = file.read()
-    for line in filecontents.split("\n"):
-        if line == "":
-            continue
-        original = line.split("\t")[0]
-        othername = line.split("\t")[1]
-        aliases[othername.lower()] = original.lower()
-    file.close()
     
     #Mega Something
     for i in range(settings.megapokemonindices[0], settings.megapokemonindices[1]):
@@ -245,6 +241,18 @@ def updatealiases():
         skill = PokemonAbility.getAbilityInfo(i)
         if skill.name.find(" ") != -1:
             aliases[skill.name.replace(" ", "").lower()] = skill.name.lower()
+    
+    #Read from saved file
+    #Exceptions (like unown! will be fixed here too)
+    file = open("../" + settings.aliasesfile, encoding="utf8")
+    filecontents = file.read()
+    for line in filecontents.split("\n"):
+        if line == "":
+            continue
+        original = line.split("\t")[0]
+        othername = line.split("\t")[1]
+        aliases[othername.lower()] = original.lower()
+    file.close()
 
 def addalias(original, alias):
     if alias.lower() in aliases.keys():
@@ -375,6 +383,7 @@ updateresponses()
 ###################
 #DISCORD BOT SETUP#
 ###################
+global client
 client = discord.Client()
 
 shuffleservers = []
@@ -408,9 +417,11 @@ async def on_ready():
     
     print("Shuffle Servers: {}".format(", ".join([x.name for x in shuffleservers])))
     
-    if settings.pinnedhelpmessageid != "":
-        THEchannel = client.get_channel(settings.pinnedhelpmessagechid)
-        THEmessage = await client.get_message(THEchannel, settings.pinnedhelpmessageid)
+    for pair in settings.pinnedhelpmessages:
+        chid = pair[0]
+        msid = pair[1]
+        THEchannel = client.get_channel(chid)
+        THEmessage = await client.get_message(THEchannel, msid)
         if THEmessage.content != settings.message_helpmessage:
             await client.edit_message(THEmessage, new_content=settings.message_helpmessage)
 
@@ -496,8 +507,17 @@ async def on_message(message):
         if command == "sendmessage":
             channelid = params[0]
             THEchannel = client.get_channel(channelid)
-            THEmessage = settings.paramdelim.join(params[1:]).replace(channelid, "")
-            return await client.send_message(THEchannel, THEmessage)
+            THEmessagecontent = settings.paramdelim.join(params[1:]).replace(channelid, "")
+            THEmessage = await client.send_message(THEchannel, THEmessagecontent)
+            userlastoutput[message.author.id] = THEmessage
+            try:
+                botoutputs[THEchannel].append(THEmessage)
+            except KeyError:
+                botoutputs[THEchannel] = [THEmessage]
+            return
+        
+        if command == "quit":
+            return await client.logout()
         
         if command == "changeusername":
             return await client.edit_profile(username=params[0])
@@ -690,7 +710,7 @@ async def on_message(message):
             #parse params
             try:
                 try:
-                    original = aliases[params[0]]
+                    original = aliases[params[0].lower()]
                 except KeyError:
                     original = params[0]
             except IndexError:
@@ -777,12 +797,16 @@ async def on_message(message):
         
         #STAGE
         if command == "stage" or command == "stagex":
+            if len(params) < 1:
+                return await sendmessage(message, sendcontent=settings.message_stage_noparam)
+            
             if command == "stagex":
                 shorthand = True
             else:
                 shorthand = False
             resultnumber = 0
             
+            #parse params
             querypokemon = params[0].lower()
             if querypokemon.isdigit():
                 stagetype = "main"
@@ -799,6 +823,12 @@ async def on_message(message):
                 except KeyError:
                     okay = "okay"
                 stagetype = "all"
+            
+            if len(params) >= 2:
+                try:
+                    resultnumber = int(params[1])
+                except ValueError:
+                    return await sendmessage(message, sendcontent=settings.message_stage_invalidparam2)
             
             results = []
             resultsmobile = []
@@ -855,7 +885,7 @@ async def on_message(message):
             #if a result number is given
             if resultnumber != 0:
                 try:
-                    return await sendmessage(message, sendembed=formatstageembed(results[resultnumber-1], stagetype, mobile=resultsmobile[resultnumber-1], shorthand=shorthand))
+                    return await sendmessage(message, sendembed=formatstageembed(results[resultnumber-1][1], results[resultnumber-1][0], mobile=resultsmobile[resultnumber-1][1], shorthand=shorthand))
                 except IndexError:
                     if len(results) != 0:
                         return await sendmessage(message, sendcontent=settings.message_stage_resulterror.format(len(results)))
@@ -914,39 +944,95 @@ async def on_message(message):
                     return await sendmessage(message, sendcontent=settings.message_event_noresult.format(params[0]))
         
         #QUERY
-        if command == "query":
+        if command == "query" or command == "queryx":
             #initialize query values to blank
-            queries = {"type":"", "bp":"", "rmls":"", "maxap":"", "skill":"", "ss":"", "skillss":""}
+            queries = {"type":"", "bp":"", "rmls":"", "maxap":"", "skill":"", "ss":"", "skillss":"", "sortby":""}
+            operations = {"bp":"", "rmls":"", "maxap":""}
             
             #parse params, put values into query values
             for subquery in params:
-                if len(subquery.split("=")) <= 1:
+                #accept five (seven) different operations
+                operation = ""
+                for op in [">=", "<=", "=>", "=<", ">", "<", "="]:
+                    if len(subquery.split(op)) == 2:
+                        operation = op
+                        break
+                if operation == "":
                     continue
                 
-                left = subquery.split("=")[0]
+                #split
+                left = subquery.split(operation)[0].lower()
+                
+                #sorta an exception
+                if left == "rml":
+                    left = "rmls"
+                
+                #skills maybe used an alias
+                if left == "skill":
+                    try:
+                        right = aliases[subquery.split(operation)[1]].lower()
+                    except KeyError:
+                        right = subquery.split(operation)[1].lower()
+                #make sure these are integers...
+                elif left in ["bp", "rmls", "maxap"]:
+                    try:
+                        right = int(subquery.split(operation)[1])
+                    except ValueError:
+                        right = ""
+                else:
+                    right = subquery.split(operation)[1].lower()
+                
+                #assign values
                 try:
-                    right = aliases[subquery.split("=")[1]]
-                except KeyError:
-                    right = subquery.split("=")[1]
-                try:
-                    queries[left] = right.lower()
+                    queries[left] = right
+                    operations[left] = operation
                 except KeyError:
                     continue
             
             hits = []
+            hitsbp = {}
+            hitstype = {}
+            hitsmaxap = {}
             
             #check each pokemon
-            for i in range(1023):
+            for i in range(settings.pokemonindices[0], settings.pokemonindices[1]):
                 pokemon = PokemonData.getPokemonInfo(i)
                 tempss = [x.lower() for x in pokemon.ss]
                 
+                if queries["bp"] != "":
+                    if operations["bp"] in [">=", "=>"] and pokemon.bp < queries["bp"]:
+                        continue
+                    elif operations["bp"] in ["<=", "=<"] and pokemon.bp > queries["bp"]:
+                        continue
+                    elif operations["bp"] == ">" and pokemon.bp <= queries["bp"]:
+                        continue
+                    elif operations["bp"] == "<" and pokemon.bp >= queries["bp"]:
+                        continue
+                    elif operations["bp"] == "=" and pokemon.bp != queries["bp"]:
+                        continue
+                if queries["rmls"] != "":
+                    if operations["rmls"] in [">=", "=>"] and pokemon.rmls < queries["rmls"]:
+                        continue
+                    elif operations["rmls"] in ["<=", "=<"] and pokemon.rmls > queries["rmls"]:
+                        continue
+                    elif operations["rmls"] == ">" and pokemon.rmls <= queries["rmls"]:
+                        continue
+                    elif operations["rmls"] == "<" and pokemon.rmls >= queries["rmls"]:
+                        continue
+                    elif operations["rmls"] == "=" and pokemon.rmls != queries["rmls"]:
+                        continue
+                if queries["maxap"] != "":
+                    if operations["maxap"] in [">=", "=>"] and pokemon.maxap < queries["maxap"]:
+                        continue
+                    elif operations["maxap"] in ["<=", "=<"] and pokemon.maxap > queries["maxap"]:
+                        continue
+                    elif operations["maxap"] == ">" and pokemon.maxap <= queries["maxap"]:
+                        continue
+                    elif operations["maxap"] == "<" and pokemon.maxap >= queries["maxap"]:
+                        continue
+                    elif operations["maxap"] == "=" and pokemon.maxap != queries["maxap"]:
+                        continue
                 if queries["type"] != "" and queries["type"] != pokemon.type.lower():
-                    continue
-                if queries["bp"] != "" and queries["bp"] != str(pokemon.bp):
-                    continue
-                if queries["rmls"] != "" and queries["rmls"] != str(pokemon.rmls):
-                    continue
-                if queries["maxap"] != "" and queries["maxap"] != str(pokemon.maxap):
                     continue
                 if queries["skill"] != "" and queries["skill"] != pokemon.ability.lower():
                     continue
@@ -956,24 +1042,97 @@ async def on_message(message):
                     continue
                 
                 #if skillss is used, boldify pokemon with ss
-                if queries["skillss"] != "" and queries["skillss"] not in tempss:
-                    hits.append(pokemon.fullname)
-                elif queries["skillss"] != "":
-                    hits.append("{}**".format(pokemon.fullname))
+                #it can't start with ** because it needs to be sorted by name
+                if queries["skillss"] != "" and queries["skillss"] in tempss:
+                    hitname = "{}**".format(pokemon.fullname)
                 else:
-                    hits.append(pokemon.fullname)
+                    hitname = pokemon.fullname
+                
+                try:
+                    hitsbp[str(pokemon.bp)].append(hitname)
+                except KeyError:
+                    hitsbp[str(pokemon.bp)] = [hitname]
+                
+                try:
+                    hitsmaxap[pokemon.maxap].append(hitname)
+                except KeyError:
+                    hitsmaxap[pokemon.maxap] = [hitname]
+                
+                try:
+                    hitstype[pokemon.type].append(hitname)
+                except KeyError:
+                    hitstype[pokemon.type] = [hitname]
+                
+                hits.append(hitname)
             
             #sort results and create a string to send
             hits.sort()
+            
             if len(hits) > settings.queryresultlimit:
-                outputstring = settings.message_query_toomanyresults
+                outputstring = settings.message_query_toomanyresults.format(len(hits))
             elif len(hits) == 0:
                 outputstring = settings.message_query_noresult
             else:
-                outputstring = settings.message_query_result.format(len(hits)) + " "
-                for item in hits:
-                    outputstring += "{}, ".format("**" + item if item.find("**") != -1 else item)
-                outputstring = outputstring[:-2]
+                outputstring = settings.message_query_result.format(len(hits))
+                
+                #format output depending on which property to sort by
+                if queries["sortby"] == "bp":
+                    for THEbp in sorted(hitsbp.keys()):
+                        outputstring += "\n**{}**: ".format(THEbp)
+                        hitsbp[THEbp].sort()
+                        for item in hitsbp[THEbp]:
+                            if command == "queryx":
+                                if item.find("**") != -1:
+                                    outputstring += "({})".format(emojis[strippunctuation(item[:-2]).lower()])
+                                else:
+                                    outputstring += emojis[strippunctuation(item).lower()]
+                            else:
+                                outputstring += "{}, ".format("**" + item if item.find("**") != -1 else item)
+                        if command != "queryx":
+                            outputstring = outputstring[:-2]
+                
+                elif queries["sortby"] == "maxap":
+                    for THEmaxap in sorted(hitsmaxap.keys()):
+                        outputstring += "\n**{}**: ".format(THEmaxap)
+                        hitsmaxap[THEmaxap].sort()
+                        for item in hitsmaxap[THEmaxap]:
+                            if command == "queryx":
+                                if item.find("**") != -1:
+                                    outputstring += "({})".format(emojis[strippunctuation(item[:-2]).lower()])
+                                else:
+                                    outputstring += emojis[strippunctuation(item).lower()]
+                            else:
+                                outputstring += "{}, ".format("**" + item if item.find("**") != -1 else item)
+                        if command != "queryx":
+                            outputstring = outputstring[:-2]
+                
+                elif queries["sortby"] == "type":
+                    for THEtype in sorted(hitstype.keys()):
+                        outputstring += "\n**{}**: ".format(THEtype)
+                        hitstype[THEtype].sort()
+                        for item in hitstype[THEtype]:
+                            if command == "queryx":
+                                if item.find("**") != -1:
+                                    outputstring += "({})".format(emojis[strippunctuation(item[:-2]).lower()])
+                                else:
+                                    outputstring += emojis[strippunctuation(item).lower()]
+                            else:
+                                outputstring += "{}, ".format("**" + item if item.find("**") != -1 else item)
+                        if command != "queryx":
+                            outputstring = outputstring[:-2]
+                
+                else:
+                    outputstring += " "
+                    for item in hits:
+                        if command == "queryx":
+                            if item.find("**") != -1:
+                                outputstring += "({})".format(emojis[strippunctuation(item[:-2]).lower()])
+                            else:
+                                outputstring += emojis[strippunctuation(item).lower()]
+                        else:
+                            outputstring += "{}, ".format("**" + item if item.find("**") != -1 else item)
+                    if command != "queryx":
+                        outputstring = outputstring[:-2]
             
             return await sendmessage(message, sendcontent=outputstring)
         

@@ -1,3 +1,5 @@
+# -*- coding: utf_8 -*-
+
 #KALEO FILES
 appdatafolder = "appoutput"
 extradatafolder = "output"
@@ -13,7 +15,7 @@ eventsfile = "Configuration Tables/eventStage.bin"
 ebrewardsfile = "Configuration Tables/stagePrizeEventLevel.bin"
 
 #BOT FILES
-botname = "Torchicc"
+botname = "Lycanrocc"
 adminsfile = "admins.txt"
 aliasesfile = "namealiases.txt"
 commandlocksfile = "commandlocks.txt"
@@ -24,15 +26,14 @@ restrictedusersfile = "restrictedusers.txt"
 #BOT SETTINGS
 commandprefix = "?"
 paramdelim = ", "
-otherservernames = ["KoduckBot Beta Testers", "/r/PokemonShuffle", "ren day"]
-ignoreemojiservers = ["/r/PokemonShuffle"]
-publiccommands = ["help", "addalias", "listaliases", "oops", "pokemon", "dex", "skill", "stage", "stagex", "event", "query", "ebrewards", "eb", "week", "emojify"]
+otherservernames = ["Elite Shufflers", "/r/PokemonShuffle", "ren day", "(🐲)"]
+ignoreemojiservers = ["/r/PokemonShuffle", "ren day", "(🐲)"]
+publiccommands = ["help", "addalias", "listaliases", "oops", "pokemon", "dex", "skill", "stage", "stagex", "event", "query", "queryx" "ebrewards", "eb", "week", "emojify"]
 admincommands = ["commandlock", "restrict", "addresponse", "purge"]
-masteradmincommands = ["updateadmins", "updatealiases", "updatecommandlocks", "addadmin", "updaterestrictedusers", "updateresponses", "currentweek", "sendmessage", "changeusername"]
+masteradmincommands = ["updateadmins", "updatealiases", "updatecommandlocks", "addadmin", "updaterestrictedusers", "updateresponses", "currentweek", "sendmessage", "changeusername", "quit"]
 masteradmin = "132675899265908738"
-pinnedhelpmessagechid = "210589834937368576"
-pinnedhelpmessageid = "427048690121965568"
-logresultcharlimit = 100
+pinnedhelpmessages = [("210589834937368576", "427048690121965568"), ("420538950747422720", "421034325681635360")]
+logresultcharlimit = 200
 logmessagecharlimit = 100
 queryresultlimit = 100
 purgelimit = 20
@@ -46,13 +47,14 @@ nummainstages = 700
 numexpertstages = 53
 numeventstages = 716
 numweeks = 24
-currentweek = 12
+currentweek = 15
 
 #MESSAGES
 message_somethingbroke = "Something broke"
 message_unknowncommand = "Command not recognized"
 message_unhandlederror = "Unhandled error"
 message_messagetoolong = "(Message too long)"
+message_resulttoolong = "Sorry, the result was too long to output ({}/2000 characters)"
 message_cooldownactive = "Cooldown active"
 message_restrictedaccess = "This command can only be used by {} admins".format(botname)
 message_restrictedaccess2 = "This command can only be used by the {} masteradmin".format(botname)
@@ -103,7 +105,7 @@ message_event_noparam = "I need a Pokemon name to look up events for!"
 message_event_invalidparam = "Result number should be an integer"
 message_event_noresult = "Could not find an event with '{}'"
 message_event_resulterror = "Result number wasn't in the range of results ({})"
-message_query_toomanyresults = "Too many hits!"
+message_query_toomanyresults = "Too many hits ({})!"
 message_query_noresult = "No hits"
 message_query_result = "{} results:"
 message_ebrewards_noparam = "I need a Pokemon name to look up EB rewards for!"
@@ -115,9 +117,9 @@ message_helpmessage = "This is a bot that provides Pokemon Shuffle data grabbed 
                       "**{}help <command>** - provides details of a command if given, otherwise shows this help message\n".format(commandprefix) + \
                       "**{}pokemon [pokemon]** - provides stats of a Pokemon (alternatively {}dex)\n".format(commandprefix, commandprefix) + \
                       "**{}skill [skill]** - provides stats of a skill\n".format(commandprefix) + \
-                      "**{}stage [pokemon/stageindex]** - provides details of a stage, including disruptions ({}stagex to omit disruption data)\n".format(commandprefix, commandprefix) + \
+                      "**{}stage [pokemon/stageindex]{}<resultnumber>** - provides details of a stage, including disruptions ({}stagex to omit disruption data), optional parameter resultnumber is used to return the nth result in the case of multiple results\n".format(commandprefix, paramdelim, commandprefix) + \
                       "**{}event [pokemon]{}<resultnumber>** - provides info about an event, including dates\n".format(commandprefix, paramdelim) + \
-                      "**{}query <filters>** - searches for Pokemon that match the given filters\n".format(commandprefix) + \
+                      "**{}query <filters>** - searches for Pokemon that match the given filters ({}queryx to use emojis)\n".format(commandprefix, commandprefix) + \
                       "**{}ebrewards [pokemon]** - lists the rewards of an eb\n".format(commandprefix) + \
                       "**{}eb [pokemon]{}<level>** - lists the levels, HP, and moves/seconds of an eb, or provides stage details of a level if given\n".format(commandprefix, paramdelim) + \
                       "**{}week <weeknumber>** - provides quick info of all the events that start during a week (current week if weeknumber is omitted)\n".format(commandprefix) + \
@@ -128,20 +130,21 @@ message_commandhelp_pokemon = "**Description**: Provides stats of a Pokemon (alt
                               "**Example**: {}pokemon bulbasaur".format(commandprefix)
 message_commandhelp_skill = "**Description**: Provides stats of a skill\n" + \
                             "**Example**: {}skill power of 4".format(commandprefix)
-message_commandhelp_stage = "**Description**: Provides details of a stage, including disruptions ({}stagex to omit disruption data). The query can be a Pokemon name or a stage index. Querying by index will always have one result (unless it's out of range). Querying by Pokemon may have more than one result, in which case {} will provide the result indices so the user can run the command again with the desired stage index.\n".format(commandprefix, botname) + \
+message_commandhelp_stage = "**Description**: Provides details of a stage, including disruptions ({}stagex to omit disruption data). The query can be a Pokemon name or a stage index. Querying by index will always have one result (unless it's out of range). Querying by Pokemon may have more than one result, in which case {} will provide the result indices so the user can run the command again with the desired stage index. An optional second parameter can be given to skip this step.\n".format(commandprefix, botname) + \
                             "**Example**: {}stage 424\n".format(commandprefix) + \
-                            "**Example**: {}stage charizard\n".format(commandprefix) + \
-                            "**Example**: {}stage wobbuffet (male)\n".format(commandprefix)
+                            "**Example**: {}stage piplup\n".format(commandprefix) + \
+                            "**Example**: {}stage chansey{}2\n".format(commandprefix, paramdelim)
 message_commandhelp_event = "**Description**: Finds events with the given Pokemon and provides info, including dates. By default, the first result will be outputted, but an optional second parameter 'resultnumber' can be given.\n" + \
                             "**Example**: event wobbuffet (male)\n".format(commandprefix)
-message_commandhelp_query = "**Description**: Searches for Pokemon that match the given filters. Any number of parameters can be given, but only valid ones will actually filter correctly. Filters must be in the form [stat]=[value], and the valid stats are: type, bp, rmls, maxap, skill, ss, skillss. If skillss is used, the Pokemon with the SS skill are boldified. To prevent walls of text, results with over 100 hits won't be printed.\n" + \
-                            "**Example**: {}query type=grass{}bp=40{}rml=20{}skill=power of 4{}ss=mega boost+\n".format(commandprefix, paramdelim, paramdelim, paramdelim, paramdelim) + \
-                            "**Example**: {}query maxap=105{}skillss=shot out\n".format(commandprefix, paramdelim)
+message_commandhelp_query = "**Description**: Searches for Pokemon that match the given filters ({}queryx to use emojis). Any number of parameters can be given, but only valid ones will actually filter correctly. Filters must be in the form [stat][operation][value]. Sortby filter can be set to either bp, maxap, or type. If skillss is used, the Pokemon with the SS skill are boldified (or surrounded by parantheses if emojis are used).\n**Valid stats**: type, bp, rmls, maxap, skill, ss, skillss, sortby\n**Valid operations**: >=, <=, >, <, = (the first four only work for bp, rmls, maxap)\n".format(commandprefix) + \
+                            "**Example**: {}query type=grass{}bp=40{}rmls=20{}skill=power of 4{}ss=mega boost+\n".format(commandprefix, paramdelim, paramdelim, paramdelim, paramdelim) + \
+                            "**Example**: {}query maxap>=105{}skillss=shot out\n".format(commandprefix, paramdelim) + \
+                            "**Example**: {}query skillss=mega boost, sortby=bp".format(commandprefix, paramdelim)
 message_commandhelp_ebrewards = "**Description**: Lists the rewards of an eb\n" + \
                                 "**Example**: {}ebrewards volcanion".format(commandprefix)
 message_commandhelp_eb = "**Description**: Lists the levels, HP, and moves/seconds of an eb. A second parameter can be given to provide stage details of an eb level.\n" + \
-                         "**Example**: {}eb volcanion".format(commandprefix) + \
-                         "**Example"": {}eb darkrai, 200".format(commandprefix)
+                         "**Example**: {}eb volcanion\n".format(commandprefix) + \
+                         "**Example**: {}eb darkrai, 200".format(commandprefix)
 message_commandhelp_week = "**Description**: Provides quick info of all the events that start during a week, including drop items and rates and attempt costs. Omitting weeknumber will show details for the current week.\n" + \
                            "**Example**: {}week 5".format(commandprefix)
 message_commandhelp_addalias = "**Description**: Adds an alias for a name to make it easier for {} to recognize names. The first parameter, name, can be an existing alias. At the moment, aliases can't be removed through commands, so be careful.\n".format(botname) + \
